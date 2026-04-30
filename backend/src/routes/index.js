@@ -39,6 +39,7 @@ const calendrierRoutes = require('./calendrier');
 const uploadRoutes = require('./upload');
 const reviewsRoutes = require('./reviews');
 const wishlistRoutes = require('./wishlist');
+const demoRoutes = require('./demo');
 
 // =====================================================
 // MONTAGE DES ROUTES
@@ -101,6 +102,13 @@ router.use('/gamification', gamificationRoutes);
 router.use('/stocks', stocksRoutes);
 router.use('/calendrier', calendrierRoutes);
 router.use('/upload', uploadRoutes);
+
+// =====================================================
+// ROUTES PUBLIQUES (Mode Visiteur / Démonstration)
+// =====================================================
+
+// Routes de démonstration accessibles sans authentification
+router.use('/demo', demoRoutes);
 
 // =====================================================
 // ROUTES UTILITAIRES

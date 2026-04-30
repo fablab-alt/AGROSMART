@@ -38,12 +38,11 @@ export function Navbar() {
                     <div className="flex items-center gap-2">
                         {/* Mode Découverte — visible uniquement sur desktop pour ne pas surcharger mobile */}
                         <Link
-                            href="/dashboard-producteur"
-                            onClick={() => setDiscoveryMode(true)}
+                            href="/demo"
                             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
                         >
                             <Eye className="h-4 w-4" />
-                            Mode découverte
+                            Essayer
                         </Link>
                         <Link href="/login">
                             <Button variant="ghost" className="font-medium hover:text-green-600 hover:bg-green-50">

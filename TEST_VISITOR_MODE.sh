@@ -1,0 +1,133 @@
+#!/bin/bash
+
+# Script de test du mode visiteur AgroSmart
+# Ce script vérifie que tout fonctionne correctement
+
+echo "================================"
+echo "  Test Mode Visiteur AgroSmart"
+echo "================================"
+echo ""
+
+# Vérifier que les fichiers existent
+echo "📋 Vérification des fichiers..."
+echo ""
+
+FILES=(
+    "frontend/src/app/demo/page.tsx"
+    "frontend/src/hooks/useGeolocation.ts"
+    "frontend/src/components/landing/CTASection.tsx"
+    "backend/src/routes/demo.js"
+)
+
+for file in "${FILES[@]}"; do
+    if [ -f "$file" ]; then
+        echo "✅ $file"
+    else
+        echo "❌ $file - MANQUANT"
+    fi
+done
+
+echo ""
+echo "🔌 Vérification des routes backend..."
+echo ""
+
+# Tester les routes publiques
+ROUTES=(
+    "/api/demo/parcelles"
+    "/api/demo/alertes"
+    "/api/demo/recommandations"
+    "/api/demo/stats"
+    "/api/demo/features"
+)
+
+for route in "${ROUTES[@]}"; do
+    echo "→ GET http://localhost:3600${route}"
+done
+
+echo ""
+echo "================================"
+echo "  Guide de Test Complet"
+echo "================================"
+echo ""
+echo "1. DÉMARRER LE BACKEND"
+echo "   cd backend"
+echo "   npm run dev"
+echo ""
+echo "2. DÉMARRER LE FRONTEND (dans un autre terminal)"
+echo "   cd frontend"
+echo "   npm run dev"
+echo ""
+echo "3. ACCÉDER À LA DÉMO"
+echo "   http://localhost:3603/demo"
+echo ""
+echo "4. TESTER LES ROUTES"
+echo "   curl http://localhost:3600/api/demo/parcelles"
+echo "   curl http://localhost:3600/api/demo/alertes"
+echo "   curl http://localhost:3600/api/demo/stats"
+echo ""
+echo "5. VÉRIFIER L'INTERFACE"
+echo "   ✓ Page charge sans erreur"
+echo "   ✓ Bouton géolocalisation présent"
+echo "   ✓ 3 parcelles affichées"
+echo "   ✓ Alertes et recommandations visibles"
+echo "   ✓ CTAs vers inscription fonctionnels"
+echo ""
+echo "6. TESTER LA GÉOLOCALISATION"
+echo "   ✓ Cliquer sur 'Détecter ma position'"
+echo "   ✓ Autoriser l'accès à la position"
+echo "   ✓ Vérifier affichage lat/lon"
+echo "   ✓ Vérifier précision en mètres"
+echo ""
+echo "================================"
+echo "  Checklist de Validation"
+echo "================================"
+echo ""
+echo "Frontend:"
+echo "  [ ] Page /demo accessible"
+echo "  [ ] Géolocalisation fonctionne"
+echo "  [ ] Parcelles affichées"
+echo "  [ ] Alertes visibles"
+echo "  [ ] Recommandations dynamiques"
+echo "  [ ] CTA inscription cliquables"
+echo ""
+echo "Backend:"
+echo "  [ ] /api/demo/parcelles répond"
+echo "  [ ] /api/demo/alertes répond"
+echo "  [ ] /api/demo/recommandations répond"
+echo "  [ ] /api/demo/stats répond"
+echo "  [ ] /api/demo/features répond"
+echo "  [ ] Aucune authentification requise"
+echo ""
+echo "Navigation:"
+echo "  [ ] Landing page → Bouton 'Essayer' → /demo"
+echo "  [ ] Navbar → Bouton 'Essayer' → /demo"
+echo "  [ ] /demo → 'S'inscrire' → /register"
+echo "  [ ] /demo → 'Se connecter' → /login"
+echo ""
+echo "Géolocalisation:"
+echo "  [ ] Permission demandée au premier clic"
+echo "  [ ] Coordonnées affichées si acceptée"
+echo "  [ ] Message d'erreur si rejetée"
+echo "  [ ] Bouton pour relancer détection"
+echo ""
+echo "================================"
+echo "  Dépannage"
+echo "================================"
+echo ""
+echo "Si les routes ne répondent pas:"
+echo "  1. Vérifier que backend/src/routes/demo.js existe"
+echo "  2. Vérifier que le fichier est requis dans index.js"
+echo "  3. Relancer: npm run dev"
+echo ""
+echo "Si la géolocalisation ne fonctionne pas:"
+echo "  1. Vérifier que le navigateur supporte l'API"
+echo "  2. Accéder via HTTP localhost (pas HTTPS en dev)"
+echo "  3. Vérifier les permissions du navigateur"
+echo ""
+echo "Si la page démo n'affiche rien:"
+echo "  1. Vérifier la console du navigateur (F12)"
+echo "  2. Vérifier que frontend/src/app/demo/page.tsx existe"
+echo "  3. Vérifier les logs du frontend:"
+echo "     npm run dev"
+echo ""
+echo "================================"
