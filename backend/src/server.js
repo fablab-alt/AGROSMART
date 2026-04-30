@@ -188,7 +188,7 @@ app.use(errorHandler);
 
 // Fonctions utilitaires Socket.IO
 app.set('emitAlert', (userId, alert) => {
-  io.to(`user:${userId}`).emit('alert:new', alert);
+  io.to(`user_${userId}`).emit('alert:new', alert);
 });
 
 app.set('emitMeasurement', (parcelleId, measurement) => {

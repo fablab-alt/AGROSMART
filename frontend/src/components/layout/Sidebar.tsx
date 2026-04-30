@@ -3,8 +3,10 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/lib/store'
+import { isDiscoveryModeEnabled } from '@/lib/discoveryMode'
 import {
   LayoutDashboard,
   MapPin,
@@ -26,6 +28,7 @@ import {
   Package,
   CalendarDays,
   BookOpen,
+  Eye,
 } from 'lucide-react'
 
 const navigation = [
@@ -55,6 +58,11 @@ const bottomNavigation = [
 export function Sidebar() {
   const pathname = usePathname()
   const { sidebarOpen, setSidebarOpen } = useUIStore()
+  const [discoveryMode, setDiscoveryMode] = useState(false)
+
+  useEffect(() => {
+    setDiscoveryMode(isDiscoveryModeEnabled())
+  }, [])
 
   return (
     <>
@@ -79,12 +87,12 @@ export function Sidebar() {
           <Link href="/dashboard" className="flex items-center gap-2">
              <div className={`flex items-center overflow-hidden transition-all duration-300 ${sidebarOpen ? 'w-48 justify-start' : 'w-10 justify-center'}`}>
               <div className={`relative ${sidebarOpen ? 'h-12 w-full' : 'h-10 w-10'}`}>
-                 <Image 
-                   src="/logo.png" 
-                   alt="AgroSmart" 
-                   width={160} 
-                   height={48} 
-                   className={`object-contain h-full w-auto ${sidebarOpen ? 'object-left' : 'object-center'}`} 
+                 <Image
+                   src="/logo.png"
+                   alt="AgroSmart"
+                   width={160}
+                   height={48}
+                   className={`object-contain h-full w-auto ${sidebarOpen ? 'object-left' : 'object-center'}`}
                  />
               </div>
             </div>
@@ -100,6 +108,14 @@ export function Sidebar() {
             )}
           </button>
         </div>
+
+        {/* Discovery mode indicator */}
+        {discoveryMode && sidebarOpen && (
+          <div className="mx-3 mt-3 flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-3 py-2">
+            <Eye className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Mode découverte</span>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4">

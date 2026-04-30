@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { clearDiscoveryMode } from '@/lib/discoveryMode'
 
 // Types
 export interface User {
@@ -138,9 +139,11 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       setToken: (token) => set({ token }),
       login: (user, token, refreshToken) => {
+        clearDiscoveryMode()
         set({ user, token, refreshToken: refreshToken || null, isAuthenticated: true, isLoading: false })
       },
       logout: () => {
+        clearDiscoveryMode()
         if (typeof window !== 'undefined') {
           localStorage.removeItem('auth-storage')
         }

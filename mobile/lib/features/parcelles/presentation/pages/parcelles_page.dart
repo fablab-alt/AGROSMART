@@ -373,10 +373,104 @@ class _ParcellesPageState extends State<ParcellesPage> {
   void _showAddParcelleDialog() {
     final nomController = TextEditingController();
     final superficieController = TextEditingController();
-    final latController = TextEditingController(text: '5.35'); // Default
-    final longController = TextEditingController(text: '-4.00'); // Default
     String selectedCulture = 'Maïs';
     String selectedTypeSol = 'Argileux';
+    double? latitude;
+    double? longitude;
+    bool isLocating = false;
+    bool isSubmitting = false;
+
+    Future<void> fetchLocation(StateSetter setModalState) async {
+      setModalState(() => isLocating = true);
+      try {
+        final position = await _getCurrentLocation();
+        if (position != null) {
+          setModalState(() {
+            latitude = position.latitude;
+            longitude = position.longitude;
+          });
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Position GPS récupérée avec succès.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur GPS: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setModalState(() => isLocating = false);
+        }
+      }
+    }
+
+    Future<void> submitParcelle(StateSetter setModalState) async {
+      if (nomController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Le nom de la parcelle est requis.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      setModalState(() => isSubmitting = true);
+      try {
+        if (latitude == null || longitude == null) {
+          await fetchLocation(setModalState);
+        }
+
+        if (latitude == null || longitude == null) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Impossible de créer sans position GPS.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        // Map UI values to Backend values
+        String typeSolBackend = selectedTypeSol.toLowerCase();
+        if (typeSolBackend == 'limono-argileux') {
+          typeSolBackend = 'limono_argileux';
+        }
+
+        context.read<ParcelleBloc>().add(
+          CreateParcelle({
+            'nom': nomController.text.trim(),
+            'superficie': double.tryParse(superficieController.text) ?? 0.0,
+            'latitude': latitude,
+            'longitude': longitude,
+            'description': 'Culture de $selectedCulture',
+            'type_sol': typeSolBackend,
+          }),
+        );
+
+        if (!mounted) return;
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Création en cours...'),
+            backgroundColor: Colors.blue,
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setModalState(() => isSubmitting = false);
+        }
+      }
+    }
 
     showModalBottomSheet(
       context: context,
@@ -384,186 +478,167 @@ class _ParcellesPageState extends State<ParcellesPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => SingleChildScrollView(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          left: 24,
-          right: 24,
-          top: 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).dividerColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Nouvelle Parcelle',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: nomController,
-              decoration: InputDecoration(
-                labelText: 'Nom de la parcelle',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.landscape),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: superficieController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Superficie (hectares)',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.square_foot),
-              ),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: selectedCulture,
-              decoration: InputDecoration(
-                labelText: 'Culture',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.eco),
-              ),
-              items: [
-                'Maïs',
-                'Riz',
-                'Tomate',
-                'Manioc',
-                'Arachide',
-              ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-              onChanged: (value) => selectedCulture = value!,
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: selectedTypeSol,
-              decoration: InputDecoration(
-                labelText: 'Type de sol',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.terrain),
-              ),
-              items: [
-                'Argileux',
-                'Sablonneux',
-                'Limono-argileux',
-              ].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-              onChanged: (value) => selectedTypeSol = value!,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: latController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Latitude',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => SingleChildScrollView(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            left: 24,
+            right: 24,
+            top: 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).dividerColor,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextField(
-                    controller: longController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Longitude',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextButton.icon(
-              onPressed: () async {
-                try {
-                  final position = await _getCurrentLocation();
-                  if (position != null) {
-                    latController.text = position.latitude.toString();
-                    longController.text = position.longitude.toString();
-                  }
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Erreur GPS: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.my_location),
-              label: const Text('Utiliser ma position actuelle'),
-              style: TextButton.styleFrom(foregroundColor: Colors.blue),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Map UI values to Backend values
-                  String typeSolBackend = selectedTypeSol.toLowerCase();
-                  if (typeSolBackend == 'limono-argileux') {
-                    typeSolBackend = 'limono_argileux';
-                  }
-
-                  context.read<ParcelleBloc>().add(
-                    CreateParcelle({
-                      'nom': nomController.text,
-                      'superficie':
-                          double.tryParse(superficieController.text) ?? 0.0,
-                      'latitude': double.tryParse(latController.text) ?? 0.0,
-                      'longitude': double.tryParse(longController.text) ?? 0.0,
-                      'description': 'Culture de $selectedCulture',
-                      'type_sol': typeSolBackend,
-                    }),
-                  );
-
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Création en cours...'),
-                      backgroundColor: Colors.blue,
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Nouvelle Parcelle',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: nomController,
+                decoration: InputDecoration(
+                  labelText: 'Nom de la parcelle',
+                  border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
+                  prefixIcon: const Icon(Icons.landscape),
                 ),
-                child: const Text('Créer la parcelle'),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: superficieController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Superficie (hectares)',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.square_foot),
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: selectedCulture,
+                decoration: InputDecoration(
+                  labelText: 'Culture',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.eco),
+                ),
+                items: ['Maïs', 'Riz', 'Tomate', 'Manioc', 'Arachide']
+                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                    .toList(),
+                onChanged: (value) => selectedCulture = value!,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: selectedTypeSol,
+                decoration: InputDecoration(
+                  labelText: 'Type de sol',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.terrain),
+                ),
+                items: ['Argileux', 'Sablonneux', 'Limono-argileux']
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    .toList(),
+                onChanged: (value) => selectedTypeSol = value!,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.blue.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Localisation GPS',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      (latitude != null && longitude != null)
+                          ? 'Latitude: ${latitude!.toStringAsFixed(6)} | Longitude: ${longitude!.toStringAsFixed(6)}'
+                          : 'La position sera récupérée automatiquement avant la création.',
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: isLocating
+                    ? null
+                    : () => fetchLocation(setModalState),
+                icon: isLocating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location),
+                label: Text(
+                  isLocating
+                      ? 'Récupération de votre position...'
+                      : 'Utiliser ma position actuelle',
+                ),
+                style: TextButton.styleFrom(foregroundColor: Colors.blue),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () => submitParcelle(setModalState),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : const Text('Créer la parcelle'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

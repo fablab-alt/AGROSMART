@@ -53,11 +53,48 @@ interface Message {
   id: string
   conversation_id: string
   expediteur_id: string
+  destinataire_id?: string
   contenu: string
   type: 'texte' | 'image' | 'fichier'
   lu: boolean
   created_at: string
 }
+
+const normalizeConversation = (raw: Record<string, unknown>): Conversation => {
+  const participantId =
+    String(raw.participant_id ?? raw.contact_id ?? raw.id ?? raw.conversation_id ?? '')
+
+  const fullName = [raw.contact_prenom, raw.contact_nom]
+    .filter(Boolean)
+    .map((v) => String(v))
+    .join(' ')
+    .trim()
+
+  return {
+    id: participantId,
+    participant_id: participantId,
+    participant_nom:
+      String((raw.participant_nom ?? fullName) || raw.contact_nom || 'Utilisateur'),
+    participant_avatar: raw.participant_avatar ? String(raw.participant_avatar) : undefined,
+    dernier_message: raw.dernier_message ? String(raw.dernier_message) : undefined,
+    dernier_message_at: raw.dernier_message_at
+      ? String(raw.dernier_message_at)
+      : (raw.dernier_message_date ? String(raw.dernier_message_date) : undefined),
+    non_lus: Number(raw.non_lus ?? 0),
+    is_online: Boolean(raw.is_online),
+  }
+}
+
+const normalizeMessage = (raw: Record<string, unknown>): Message => ({
+  id: String(raw.id ?? Date.now()),
+  conversation_id: String(raw.conversation_id ?? ''),
+  expediteur_id: String(raw.expediteur_id ?? raw.user_id ?? ''),
+  destinataire_id: raw.destinataire_id ? String(raw.destinataire_id) : undefined,
+  contenu: String(raw.contenu ?? ''),
+  type: String(raw.type ?? 'texte') as Message['type'],
+  lu: Boolean(raw.lu),
+  created_at: String(raw.created_at ?? raw.createdAt ?? new Date().toISOString()),
+})
 
 export default function MessagesPage() {
   const { user } = useAuthStore()
@@ -81,7 +118,8 @@ export default function MessagesPage() {
     try {
       const response = await api.get('/messages/conversations')
       if (response.data.success) {
-        setConversations(response.data.data)
+        const normalized = (response.data.data || []).map((item: Record<string, unknown>) => normalizeConversation(item))
+        setConversations(normalized)
       }
     } catch (error) {
       console.error('Error fetching conversations:', error)
@@ -97,7 +135,8 @@ export default function MessagesPage() {
     try {
       const response = await api.get(`/messages/conversations/${conversationId}`)
       if (response.data.success) {
-        setMessages(response.data.data)
+        const normalized = (response.data.data || []).map((item: Record<string, unknown>) => normalizeMessage(item))
+        setMessages(normalized)
       }
     } catch (error) {
       console.error('Error fetching messages:', error)
@@ -172,15 +211,33 @@ export default function MessagesPage() {
 
   useEffect(() => {
     if (selectedConversation) {
-      fetchMessages(selectedConversation.id)
+      fetchMessages(selectedConversation.participant_id || selectedConversation.id)
     }
   }, [selectedConversation, fetchMessages])
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchConversations()
+      if (selectedConversation) {
+        fetchMessages(selectedConversation.participant_id || selectedConversation.id)
+      }
+    }, 5000)
+
+    return () => clearInterval(intervalId)
+  }, [fetchConversations, fetchMessages, selectedConversation])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   const handleSelectConversation = (conversation: Conversation) => {
+    if (conversation.non_lus > 0) {
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === conversation.id ? { ...conv, non_lus: 0 } : conv
+        )
+      )
+    }
     setSelectedConversation(conversation)
     setShowMobileChat(true)
   }
@@ -189,11 +246,13 @@ export default function MessagesPage() {
     e.preventDefault()
     if (!newMessage.trim() || !selectedConversation) return
 
+    const messageText = newMessage.trim()
+
     const tempMessage: Message = {
       id: Date.now().toString(),
       conversation_id: selectedConversation.id,
       expediteur_id: user?.id || 'me',
-      contenu: newMessage,
+      contenu: messageText,
       type: 'texte',
       lu: false,
       created_at: new Date().toISOString(),
@@ -205,7 +264,7 @@ export default function MessagesPage() {
     try {
       await api.post(`/messages`, {
         destinataire_id: selectedConversation.participant_id || selectedConversation.id,
-        contenu: newMessage,
+        contenu: messageText,
         type: 'texte',
       })
       // Refresh conversations to get the new one
@@ -237,7 +296,7 @@ export default function MessagesPage() {
   }
 
   const filteredConversations = conversations.filter(c =>
-    c.participant_nom.toLowerCase().includes(searchQuery.toLowerCase())
+    (c.participant_nom || '').toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const totalUnread = conversations.reduce((acc, c) => acc + c.non_lus, 0)

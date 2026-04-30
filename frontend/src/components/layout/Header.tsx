@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { 
-  Bell, 
-  Menu, 
-  Search, 
+import {
+  Bell,
+  Menu,
+  Search,
   User,
   LogOut,
   Settings,
@@ -14,9 +14,12 @@ import {
   Moon,
   Sun,
   ChevronDown,
+  LogIn,
+  UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore, useUIStore, useAlertesStore } from '@/lib/store'
+import { isDiscoveryModeEnabled } from '@/lib/discoveryMode'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -43,6 +46,11 @@ export function Header() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
+  const [discoveryMode, setDiscoveryMode] = useState(false)
+
+  useEffect(() => {
+    setDiscoveryMode(isDiscoveryModeEnabled())
+  }, [])
 
   useEffect(() => {
     if (showSearch && searchRef.current) {
@@ -156,50 +164,68 @@ export function Header() {
           )}
         </Link>
 
-        {/* User menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src="" />
-              <AvatarFallback>
-                {user ? getInitials(user.nom, user.prenom || user.prenoms || '') : 'U'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="hidden md:block text-left">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {user ? `${user.prenom || user.prenoms || ''} ${user.nom}` : 'Utilisateur'}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                {user?.role || 'Producteur'}
-              </p>
-            </div>
-            <ChevronDown className="hidden md:block h-4 w-4 text-gray-400" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 dark:bg-gray-800 dark:border-gray-700">
-            <DropdownMenuLabel className="dark:text-gray-200">Mon compte</DropdownMenuLabel>
-            <DropdownMenuSeparator className="dark:bg-gray-700" />
-            <DropdownMenuItem asChild className="dark:text-gray-300 dark:focus:bg-gray-700">
-              <Link href="/profil" className="flex items-center gap-2 cursor-pointer">
-                <User className="h-4 w-4" />
-                <span>Profil</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="dark:text-gray-300 dark:focus:bg-gray-700">
-              <Link href="/settings" className="flex items-center gap-2 cursor-pointer">
-                <Settings className="h-4 w-4" />
-                <span>Paramètres</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="dark:bg-gray-700" />
-            <DropdownMenuItem
-              onClick={handleLogout}
-              className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:text-red-400 dark:focus:text-red-400 dark:focus:bg-red-900/20"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              <span>Déconnexion</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* User menu / Discovery CTA */}
+        {discoveryMode && !user ? (
+          /* En mode découverte sans user, afficher login/register */
+          <div className="flex items-center gap-2">
+            <Link href="/login">
+              <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
+                <LogIn className="h-4 w-4" />
+                <span className="hidden sm:inline">Connexion</span>
+              </button>
+            </Link>
+            <Link href="/register">
+              <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors">
+                <UserPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">S&apos;inscrire</span>
+              </button>
+            </Link>
+          </div>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src="" />
+                <AvatarFallback>
+                  {user ? getInitials(user.nom, user.prenom || user.prenoms || '') : 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden md:block text-left">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {user ? `${user.prenom || user.prenoms || ''} ${user.nom}` : 'Utilisateur'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                  {user?.role || 'Producteur'}
+                </p>
+              </div>
+              <ChevronDown className="hidden md:block h-4 w-4 text-gray-400" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 dark:bg-gray-800 dark:border-gray-700">
+              <DropdownMenuLabel className="dark:text-gray-200">Mon compte</DropdownMenuLabel>
+              <DropdownMenuSeparator className="dark:bg-gray-700" />
+              <DropdownMenuItem asChild className="dark:text-gray-300 dark:focus:bg-gray-700">
+                <Link href="/profil" className="flex items-center gap-2 cursor-pointer">
+                  <User className="h-4 w-4" />
+                  <span>Profil</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="dark:text-gray-300 dark:focus:bg-gray-700">
+                <Link href="/settings" className="flex items-center gap-2 cursor-pointer">
+                  <Settings className="h-4 w-4" />
+                  <span>Paramètres</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="dark:bg-gray-700" />
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:text-red-400 dark:focus:text-red-400 dark:focus:bg-red-900/20"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                <span>Déconnexion</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Mobile search overlay */}

@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
 import { useAuthStore, useUIStore } from '@/lib/store'
 import { LoadingOverlay } from '@/components/ui'
 import { cn } from '@/lib/utils'
+import { isDiscoveryModeEnabled } from '@/lib/discoveryMode'
 import {
   LayoutDashboard,
   Users,
@@ -67,9 +67,16 @@ export default function AdminLayout({
     }
   }, [theme, mounted])
 
+  // Bloquer entièrement l'accès admin en mode découverte
   // Vérifier l'authentification et le rôle admin
   useEffect(() => {
     if (mounted) {
+      // Mode découverte → redirection immédiate
+      if (isDiscoveryModeEnabled()) {
+        router.push('/dashboard')
+        return
+      }
+
       if (!isAuthenticated && !token) {
         router.push('/login')
         return

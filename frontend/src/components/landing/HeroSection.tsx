@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowRight, BarChart, Activity, Users, Cloud } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { setDiscoveryMode } from '@/lib/discoveryMode'
 
 const fadeInUp = {
     initial: { opacity: 0, y: 20 },
@@ -24,8 +25,8 @@ export function HeroSection() {
     return (
         <section className="relative pt-32 pb-20 overflow-hidden">
             {/* Background Decor */}
-            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-150 h-150 bg-green-50 rounded-full blur-3xl opacity-50 -z-10" />
-            <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-100 h-100 bg-emerald-50 rounded-full blur-3xl opacity-50 -z-10" />
+            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-[600px] h-[600px] bg-green-50 rounded-full blur-3xl opacity-50 -z-10" />
+            <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-[400px] h-[400px] bg-emerald-50 rounded-full blur-3xl opacity-50 -z-10" />
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
                 <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
@@ -43,7 +44,7 @@ export function HeroSection() {
                             La plateforme n°1 en Côte d&apos;Ivoire
                         </motion.div>
                         <motion.h1 variants={fadeInUp} className="text-5xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-6 leading-[1.1]">
-                            L&apos;agriculture de demain, <span className="text-transparent bg-clip-text bg-linear-to-r from-green-600 to-emerald-600">aujourd&apos;hui</span>
+                            L&apos;agriculture de demain, <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-600">aujourd&apos;hui</span>
                         </motion.h1>
                         <motion.p variants={fadeInUp} className="text-xl text-gray-600 mb-8 leading-relaxed max-w-2xl mx-auto lg:mx-0">
                             Optimisez votre production agricole grâce à nos solutions intelligentes. Suivi en temps réel, analyses prédictives et gestion simplifiée.
@@ -55,9 +56,15 @@ export function HeroSection() {
                                     <ArrowRight className="ml-2 h-5 w-5" />
                                 </Button>
                             </Link>
-                            <Button size="lg" variant="outline" className="text-lg px-8 py-6 h-auto w-full sm:w-auto border-gray-200 hover:bg-gray-50">
-                                Voir la démo
-                            </Button>
+                            {/* "Voir la démo" active le mode découverte avant la navigation */}
+                            <Link
+                                href="/dashboard-producteur"
+                                onClick={() => setDiscoveryMode(true)}
+                            >
+                                <Button size="lg" variant="outline" className="text-lg px-8 py-6 h-auto w-full sm:w-auto border-gray-200 hover:bg-gray-50">
+                                    Voir la démo
+                                </Button>
+                            </Link>
                         </motion.div>
 
                         <motion.div variants={fadeInUp} className="mt-12 flex items-center justify-center lg:justify-start gap-8 text-gray-400">
@@ -80,7 +87,7 @@ export function HeroSection() {
                         className="relative hidden lg:block perspective-1000"
                     >
                         <div className="relative">
-                            <div className="bg-linear-to-br from-green-400 to-emerald-600 rounded-3xl p-8 shadow-2xl skew-y-0 transform transition-transform hover:scale-[1.02] duration-500">
+                            <div className="bg-gradient-to-br from-green-400 to-emerald-600 rounded-3xl p-8 shadow-2xl transform transition-transform hover:scale-[1.02] duration-500">
                                 <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg p-6 border border-white/20">
                                     <div className="flex items-center justify-between mb-8">
                                         <div className="flex items-center gap-3">
@@ -97,9 +104,11 @@ export function HeroSection() {
                                     <div className="space-y-4">
                                         {[1, 2, 3].map((i) => (
                                             <div key={i} className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors">
-                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${i === 1 ? 'bg-blue-100 text-blue-600' :
-                                                    i === 2 ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-purple-600'
-                                                    }`}>
+                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                                    i === 1 ? 'bg-blue-100 text-blue-600' :
+                                                    i === 2 ? 'bg-amber-100 text-amber-600' :
+                                                              'bg-purple-100 text-purple-600'
+                                                }`}>
                                                     <BarChart className="w-5 h-5" />
                                                 </div>
                                                 <div className="flex-1">

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
+import { isDiscoveryModeEnabled, isReadOnlyHttpMethod } from '@/lib/discoveryMode'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3600/api/v1'
 
@@ -66,7 +67,14 @@ api.interceptors.request.use(
     // Ne pas ajouter le token pour les requêtes d'authentification
     const isAuthRequest = config.url?.includes('/auth/login') ||
       config.url?.includes('/auth/register') ||
-      config.url?.includes('/auth/verify-otp');
+      config.url?.includes('/auth/verify-otp') ||
+      config.url?.includes('/auth/resend-otp') ||
+      config.url?.includes('/auth/refresh');
+
+    // En mode découverte, toute écriture métier est bloquée côté client.
+    if (isDiscoveryModeEnabled() && !isReadOnlyHttpMethod(config.method) && !isAuthRequest) {
+      return Promise.reject(new Error('Mode découverte: cette action est limitée à la lecture seule.'))
+    }
 
     if (!isAuthRequest) {
       const token = getPersistedToken()
@@ -100,6 +108,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+    const hasToken = !!getPersistedToken()
+
+    if (error.response?.status === 401 && isDiscoveryModeEnabled() && !hasToken) {
+      return Promise.reject(error)
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Ne pas tenter le refresh pour les requêtes auth
@@ -431,7 +444,7 @@ export const messagesApi = {
   }) => api.get('/messages/conversations', { params }),
 
   getConversation: (userId: string) =>
-    api.get(`/messages/conversation/${userId}`),
+    api.get(`/messages/conversations/${userId}`),
 
   send: (data: {
     destinataire_id: string

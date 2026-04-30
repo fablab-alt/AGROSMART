@@ -93,31 +93,6 @@ exports.getConversation = async (req, res, next) => {
       },
       data: {
         lu: true
-        // luAt is not in schema model shown earlier (Wait, Step 713 schema lines 488-503 show Message has 'lu' Boolean, 'createdAt'. It DOES NOT show 'luAt'.)
-        // Legacy controller used 'lu_at'. 
-        // Schema view lines 488-503:
-        // id, expediteurId, destinataireId, sujet, contenu, lu, createdAt.
-        // MISSING: luAt, type, mediaUrl, parcelleId, alerteId.
-        // Legacy controller uses them.
-
-        // This means 'Message' model in schema is INCOMPLETE.
-        // I should have checked Message model earlier.
-        // It seems the schema is very basic compared to legacy DB.
-
-        // Since I cannot change schema easily (requires migration/db modification), 
-        // and assuming DB has the columns (legacy works),
-        // I SHOULD USE RAW QUERIES for Message operations that use missing fields.
-        // OR Update the schema.
-
-        // Given I already switched to Postgres and marked things done, I should probably use raw queries to be safe and avoid schema conflicts.
-        // But basic findMany might fail if I select fields that don't exist in Prisma model? 
-        // No, verify: 'type', 'media_url' are used in 'sendMessage'.
-
-        // I will revert to using $queryRaw for 'sendMessage' and 'getConversation' if fields are missing.
-        // Actually, 'getConversation' uses `prisma.message.findMany`. If the model lacks fields, I can't select them or filter by them easily if they aren't in `where`.
-
-        // I will rewrite `messagesController.js` to use `$queryRaw` exclusively for `Message` operations to support legacy fields.
-
       }
     });
 
@@ -181,7 +156,7 @@ exports.sendMessage = async (req, res, next) => {
     // Émettre via Socket.IO si disponible
     const io = req.app.get('io');
     if (io) {
-      io.to('user:' + destinataire_id).emit('nouveau_message', {
+      io.to('user_' + destinataire_id).emit('nouveau_message', {
         ...message,
         expediteur_nom: req.user.nom
       });
@@ -403,7 +378,7 @@ exports.broadcastMessage = async (req, res, next) => {
     const io = req.app.get('io');
     if (io) {
       for (const usrId of userIds) {
-        io.to('user:' + usrId).emit('notification', {
+        io.to('user_' + usrId).emit('notification', {
           type,
           titre,
           message: contenu

@@ -54,6 +54,8 @@ services:
       - "host.docker.internal:host-gateway"
     expose:
       - "${BACKEND_PORT}"
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
       - backend_uploads:/app/backend/uploads
       - backend_logs:/app/backend/logs
@@ -110,6 +112,8 @@ services:
       TZ: ${TZ}
     expose:
       - "${FRONTEND_PORT}"
+    ports:
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     restart: unless-stopped
     depends_on:
       - backend

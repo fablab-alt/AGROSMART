@@ -44,63 +44,6 @@ interface ErrorResponse {
 export function useErrorHandler() {
     const router = useRouter()
 
-    const handleError = useCallback((
-        error: unknown,
-        context?: string,
-        options: ErrorHandlerOptions = {}
-    ) => {
-        const {
-            showToast = true,
-            toastMessage,
-            logLevel = 'error',
-            onError,
-            redirectOn401 = true
-        } = options
-
-        const err = error instanceof Error ? error : new Error(String(error))
-        const errorResponse = error as ErrorResponse
-
-        // Extract status code and API message if available
-        const statusCode = errorResponse?.response?.status
-        const apiMessage = errorResponse?.response?.data?.message
-        const errorCode = errorResponse?.response?.data?.code
-
-        // Log the error with context
-        const logContext = {
-            statusCode,
-            errorCode,
-            apiMessage,
-            url: typeof window !== 'undefined' ? window.location.href : undefined
-        }
-
-        if (logLevel === 'error') {
-            logger.error(context || 'Error occurred', err, logContext)
-        } else {
-            logger.warn(context || 'Warning occurred', { ...logContext, error: err.message })
-        }
-
-        // Handle 401 - Unauthorized (redirect to login)
-        if (statusCode === 401 && redirectOn401) {
-            toast.error('Session expirée. Veuillez vous reconnecter.')
-            router.push('/login')
-            return
-        }
-
-        // Show user-friendly toast message
-        if (showToast) {
-            const message = toastMessage || getUserFriendlyMessage(err, statusCode, apiMessage)
-            toast.error(message, {
-                duration: 5000,
-                position: 'top-right'
-            })
-        }
-
-        // Call custom error callback if provided
-        if (onError) {
-            onError(err)
-        }
-    }, [router])
-
     /**
      * Get user-friendly error message based on error type and status code
      */
@@ -156,6 +99,63 @@ export function useErrorHandler() {
         // Default fallback
         return 'Une erreur est survenue. Veuillez réessayer.'
     }, [])
+
+    const handleError = useCallback((
+        error: unknown,
+        context?: string,
+        options: ErrorHandlerOptions = {}
+    ) => {
+        const {
+            showToast = true,
+            toastMessage,
+            logLevel = 'error',
+            onError,
+            redirectOn401 = true
+        } = options
+
+        const err = error instanceof Error ? error : new Error(String(error))
+        const errorResponse = error as ErrorResponse
+
+        // Extract status code and API message if available
+        const statusCode = errorResponse?.response?.status
+        const apiMessage = errorResponse?.response?.data?.message
+        const errorCode = errorResponse?.response?.data?.code
+
+        // Log the error with context
+        const logContext = {
+            statusCode,
+            errorCode,
+            apiMessage,
+            url: typeof window !== 'undefined' ? window.location.href : undefined
+        }
+
+        if (logLevel === 'error') {
+            logger.error(context || 'Error occurred', err, logContext)
+        } else {
+            logger.warn(context || 'Warning occurred', { ...logContext, error: err.message })
+        }
+
+        // Handle 401 - Unauthorized (redirect to login)
+        if (statusCode === 401 && redirectOn401) {
+            toast.error('Session expirée. Veuillez vous reconnecter.')
+            router.push('/login')
+            return
+        }
+
+        // Show user-friendly toast message
+        if (showToast) {
+            const message = toastMessage || getUserFriendlyMessage(err, statusCode, apiMessage)
+            toast.error(message, {
+                duration: 5000,
+                position: 'top-right'
+            })
+        }
+
+        // Call custom error callback if provided
+        if (onError) {
+            onError(err)
+        }
+    }, [router, getUserFriendlyMessage])
 
     /**
      * Handle async operations with automatic error handling

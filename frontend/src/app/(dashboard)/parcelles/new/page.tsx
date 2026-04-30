@@ -50,6 +50,7 @@ export default function NewParcellePage() {
   const router = useRouter()
   const { addParcelle } = useParcellesStore()
   const [loading, setLoading] = useState(false)
+  const [isLocating, setIsLocating] = useState(false)
   const [formData, setFormData] = useState({
     nom: '',
     description: '',
@@ -74,11 +75,24 @@ export default function NewParcellePage() {
 
     setLoading(true)
     try {
+      let latitudeValue = formData.latitude ? parseFloat(formData.latitude) : Number.NaN
+      let longitudeValue = formData.longitude ? parseFloat(formData.longitude) : Number.NaN
+
+      if (!Number.isFinite(latitudeValue) || !Number.isFinite(longitudeValue)) {
+        const coords = await getCurrentLocation()
+        if (!coords) {
+          setLoading(false)
+          return
+        }
+        latitudeValue = coords.latitude
+        longitudeValue = coords.longitude
+      }
+
       const payload = {
         nom: formData.nom.trim(),
         description: formData.description.trim() || undefined,
-        latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
-        longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
+        latitude: latitudeValue,
+        longitude: longitudeValue,
         superficie: formData.superficie_hectares ? parseFloat(formData.superficie_hectares) : undefined,
         type_sol: formData.type_sol || undefined,
         status: formData.status,
@@ -102,24 +116,39 @@ export default function NewParcellePage() {
     }
   }
 
-  const getCurrentLocation = () => {
+  const getCurrentLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setFormData(prev => ({
-            ...prev,
-            latitude: position.coords.latitude.toFixed(6),
-            longitude: position.coords.longitude.toFixed(6),
-          }))
-          toast.success('Position récupérée!')
-        },
-        (error) => {
-          console.error('Geolocation error:', error)
-          toast.error('Impossible de récupérer votre position')
-        }
-      )
+      setIsLocating(true)
+      try {
+        const coords = await new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              resolve({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+              })
+            },
+            (error) => reject(error)
+          )
+        })
+
+        setFormData(prev => ({
+          ...prev,
+          latitude: coords.latitude.toFixed(6),
+          longitude: coords.longitude.toFixed(6),
+        }))
+        toast.success('Position récupérée!')
+        return coords
+      } catch (error) {
+        console.error('Geolocation error:', error)
+        toast.error('Impossible de récupérer votre position')
+        return null
+      } finally {
+        setIsLocating(false)
+      }
     } else {
       toast.error('La géolocalisation n\'est pas supportée par votre navigateur')
+      return null
     }
   }
 
@@ -260,9 +289,10 @@ export default function NewParcellePage() {
                 variant="outline"
                 className="w-full"
                 onClick={getCurrentLocation}
+                disabled={isLocating}
               >
                 <MapPin className="h-4 w-4 mr-2" />
-                Utiliser ma position actuelle
+                {isLocating ? 'Récupération GPS...' : 'Utiliser ma position actuelle'}
               </Button>
 
               <div>
