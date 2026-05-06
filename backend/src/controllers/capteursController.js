@@ -16,7 +16,7 @@ const logger = require('../utils/logger');
 exports.getAllStations = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
 
     const where = {};
@@ -125,6 +125,10 @@ exports.getStationById = async (req, res, next) => {
       throw errors.notFound('Station non trouvée');
     }
 
+    if (req.user.role === ROLES.PRODUCTEUR && station.parcelle?.userId !== req.user.id) {
+      throw errors.forbidden('Accès non autorisé à cette station');
+    }
+
     const data = {
       ...station,
       parcelle_nom: station.parcelle?.nom,
@@ -147,6 +151,15 @@ exports.updateStation = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { nom, latitude, longitude, status } = req.body;
+
+    if (req.user.role === ROLES.PRODUCTEUR) {
+      const existing = await prisma.station.findUnique({
+        where: { id },
+        select: { parcelle: { select: { userId: true } } }
+      });
+      if (!existing) throw errors.notFound('Station non trouvée');
+      if (existing.parcelle?.userId !== req.user.id) throw errors.forbidden('Modification non autorisée');
+    }
 
     const updated = await prisma.station.update({
       where: { id },
@@ -180,9 +193,15 @@ exports.deleteStation = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Hard delete or Soft delete? Schema Enum: ACTIVE, MAINTENANCE, HORS_SERVICE. No INACTIF.
-    // Use HORS_SERVICE or delete.
-    // Let's use delete()
+    if (req.user.role === ROLES.PRODUCTEUR) {
+      const existing = await prisma.station.findUnique({
+        where: { id },
+        select: { parcelle: { select: { userId: true } } }
+      });
+      if (!existing) throw errors.notFound('Station non trouvée');
+      if (existing.parcelle?.userId !== req.user.id) throw errors.forbidden('Suppression non autorisée');
+    }
+
     await prisma.station.delete({ where: { id } });
 
     logger.audit('Suppression station', { userId: req.user.id, stationId: id });
@@ -204,7 +223,7 @@ exports.deleteStation = async (req, res, next) => {
 exports.getAll = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
     const { type, status, parcelle_id } = req.query;
 

@@ -11,6 +11,7 @@ const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const hpp = require('hpp');
 const http = require('http');
 const path = require('path');
 
@@ -76,15 +77,15 @@ const allowedOrigins = config.isProd
   ? [...new Set(prodOrigins)]
   : '*';
 
-if (config.isProd && configuredOrigins.length === 0 && allowLocalhostCors) {
-  logger.warn('CORS: aucune whitelist configurée (CORS_ORIGIN/ALLOWED_ORIGINS). Fallback localhost actif.');
-}
-
 if (config.isProd && configuredOrigins.length === 0 && !allowLocalhostCors) {
-  logger.warn('CORS: aucune whitelist configurée et ALLOW_LOCALHOST_CORS=false. Toutes les origines seront bloquées.');
+  logger.error('CORS: aucune whitelist configurée et ALLOW_LOCALHOST_CORS=false. Toutes les origines bloquées. Configurez CORS_ORIGIN.');
 }
 
-if (config.isProd && allowLocalhostCors) {
+if (config.isProd && configuredOrigins.length === 0 && allowLocalhostCors) {
+  logger.warn('CORS: aucune whitelist configurée — seul le fallback localhost est actif. Configurez CORS_ORIGIN en prod.');
+}
+
+if (config.isProd && allowLocalhostCors && configuredOrigins.length > 0) {
   logger.warn('CORS: ALLOW_LOCALHOST_CORS actif. Les origines localhost sont autorisées en plus de la whitelist.');
 }
 
@@ -154,12 +155,16 @@ if (process.env.NODE_ENV !== 'test') {
 // =====================================================
 
 app.use(compression());
-app.use(cookieParser());
+app.use(hpp());
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 const { securityMiddleware, bruteForceProtection } = require('./middlewares/security');
+const { csrfProtection, csrfTokenHandler } = require('./middlewares/csrf');
+
 app.use(securityMiddleware());
 app.use('/api/v1/auth/login', bruteForceProtection());
 app.use('/api/v1/auth/otp', bruteForceProtection());
+app.use('/api/v1', csrfProtection);
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
@@ -183,6 +188,9 @@ app.use('/api/v1', routes);
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
+
+// CSRF token endpoint — le client doit appeler cet endpoint avant toute mutation
+app.get('/api/v1/csrf-token', csrfTokenHandler);
 
 // =====================================================
 // GESTION DES ERREURS
@@ -236,10 +244,11 @@ const startServer = async () => {
     // En environnement de développement / démonstration local, permettre de démarrer
     // même si la connexion à la base échoue. Pour forcer l'arrêt en production,
     // définir FAIL_ON_DB_CONN=true.
-    if (process.env.FAIL_ON_DB_CONN === 'true' || (config.isProd && process.env.ALLOW_DEMO_START !== 'true')) {
+    if (config.isProd || process.env.FAIL_ON_DB_CONN === 'true') {
+      logger.error('Impossible de démarrer sans base de données en production. Vérifiez DATABASE_URL.');
       process.exit(1);
     }
-    logger.warn('Démarrage sans connexion à la base de données — mode démonstration local');
+    logger.warn('Démarrage sans connexion à la base de données — mode démonstration local (développement uniquement)');
     // Ne pas initialiser le worker si la DB est indisponible
     server.listen(config.server.port, '0.0.0.0', () => {
       logger.info(`AgroSmart Backend démarré (mode dégradé)`);

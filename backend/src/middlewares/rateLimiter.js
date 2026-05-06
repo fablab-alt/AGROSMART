@@ -14,16 +14,24 @@
 
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis');
 const config = require('../config');
 const logger = require('../utils/logger');
+const redisClient = require('../config/redis');
 
 /**
- * Mode mémoire uniquement pour le rate limiting.
- * Store externe volontairement retiré du runtime backend.
- * @param {string} prefix - Préfixe pour les clés
- * @returns {undefined}
+ * Crée un store Redis si le client est disponible, sinon retourne undefined (mémoire).
+ * @param {string} prefix - Préfixe pour les clés Redis
+ * @returns {RedisStore|undefined}
  */
 const createLimiterStore = (prefix) => {
+  if (redisClient) {
+    logger.debug(`Rate limiter '${prefix}' uses Redis store`);
+    return new RedisStore({
+      sendCommand: (...args) => redisClient.call(...args),
+      prefix: `rl:${prefix}:`,
+    });
+  }
   logger.debug(`Rate limiter '${prefix}' uses in-memory store`);
   return undefined;
 };

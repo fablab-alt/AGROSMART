@@ -21,7 +21,7 @@ const AI_DISEASE_ENDPOINT = `${process.env.AI_SERVICE_URL || 'http://localhost:5
 exports.getAll = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
     const { type } = req.query;
 
@@ -289,7 +289,7 @@ exports.detectFromImageBatch = async (req, res, next) => {
 exports.getDetections = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
 
     const detections = await prisma.detectionMaladie.findMany({

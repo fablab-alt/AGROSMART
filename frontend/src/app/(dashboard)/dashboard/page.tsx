@@ -86,10 +86,20 @@ export default function DashboardPage() {
     const fetchData = async () => {
       setLoading(true)
       try {
-        // Fetch aggregated dashboard stats
-        const statsRes = await api.get('/dashboard/stats')
-        if (statsRes.data.success) {
-          const d = statsRes.data.data
+        // Fetch all independent endpoints in parallel
+        const [statsRes, parcellesRes, alertesRes, culturesRes, weatherRes, forecastRes, mesuresRes] =
+          await Promise.allSettled([
+            api.get('/dashboard/stats'),
+            api.get('/parcelles'),
+            api.get('/alertes?statut=NOUVELLE&limit=5'),
+            api.get('/dashboard/cultures'),
+            api.get('/weather/current'),
+            api.get('/weather/forecast'),
+            api.get('/mesures/recent'),
+          ])
+
+        if (statsRes.status === 'fulfilled' && statsRes.value.data.success) {
+          const d = statsRes.value.data.data
           setStats({
             totalParcelles: d.parcelles.count,
             totalCapteurs: d.capteurs,
@@ -98,81 +108,50 @@ export default function DashboardPage() {
           })
         }
 
-        // Fetch parcelles list for store (optional if not used elsewhere on this page, but good for cache)
-        const parcellesRes = await api.get('/parcelles')
-        if (parcellesRes.data.success) {
-          setParcelles(parcellesRes.data.data)
+        if (parcellesRes.status === 'fulfilled' && parcellesRes.value.data.success) {
+          setParcelles(parcellesRes.value.data.data)
         }
 
-        // Fetch Alertes for list (keep separate as we need the list, not just count)
-        const alertesRes = await api.get('/alertes?statut=NOUVELLE&limit=5')
-        if (alertesRes.data.success) {
-          setAlertes(alertesRes.data.data)
-          // Unread count might come from metadata or separate call, assuming stats has it covers count
-          setUnreadCount(statsRes.data.data.alertes)
+        if (alertesRes.status === 'fulfilled' && alertesRes.value.data.success) {
+          setAlertes(alertesRes.value.data.data)
+          if (statsRes.status === 'fulfilled') {
+            setUnreadCount(statsRes.value.data.data.alertes)
+          }
         }
 
-        // Fetch Culture Distribution
-        const culturesRes = await api.get('/dashboard/cultures')
-        if (culturesRes.data.success) {
-          setCultureData(culturesRes.data.data)
+        if (culturesRes.status === 'fulfilled' && culturesRes.value.data.success) {
+          setCultureData(culturesRes.value.data.data)
         }
 
-        // Fetch weather
-        try {
-          const weatherRes = await api.get('/weather/current')
-          let weatherData = null
-
-          if (weatherRes.data.success) {
-            const wd = weatherRes.data.data
-            weatherData = {
-              temperature: Math.round(wd.temperature || 0),
-              humidite: wd.humidity || wd.humidite || 0,
-              vent: Math.round(wd.wind_speed || wd.vent || 0),
-              condition: wd.condition || wd.description || 'Ensoleillé',
-              previsions: [] as WeatherData['previsions']
+        // Build weather from current + forecast
+        if (weatherRes.status === 'fulfilled' && weatherRes.value.data.success) {
+          const wd = weatherRes.value.data.data
+          const weatherData = {
+            temperature: Math.round(wd.temperature || 0),
+            humidite: wd.humidity || wd.humidite || 0,
+            vent: Math.round(wd.wind_speed || wd.vent || 0),
+            condition: wd.condition || wd.description || 'Ensoleillé',
+            previsions: [] as WeatherData['previsions']
+          }
+          if (forecastRes.status === 'fulfilled' && forecastRes.value.data.success) {
+            const forecastData = forecastRes.value.data.data
+            if (Array.isArray(forecastData)) {
+              weatherData.previsions = forecastData.slice(0, 5).map((d: any) => {
+                const date = d.date ? new Date(d.date) : null;
+                return {
+                  jour: d.jour || (date && !isNaN(date.getTime()) ? date.toLocaleDateString('fr-FR', { weekday: 'short' }) : '-'),
+                  temp_min: Math.round(d.temp_min || d.temperature_min || 0),
+                  temp_max: Math.round(d.temp_max || d.temperature_max || 0),
+                  condition: d.condition || d.description || 'Nuageux'
+                };
+              });
             }
           }
-
-          // Fetch forecast
-          try {
-            const forecastRes = await api.get('/weather/forecast')
-            if (forecastRes.data.success && weatherData) {
-              const forecastData = forecastRes.data.data
-              if (Array.isArray(forecastData)) {
-                weatherData.previsions = forecastData.slice(0, 5).map((d: any) => {
-                  const date = d.date ? new Date(d.date) : null;
-                  return {
-                    jour: d.jour || (date && !isNaN(date.getTime()) ? date.toLocaleDateString('fr-FR', { weekday: 'short' }) : '-'),
-                    temp_min: Math.round(d.temp_min || d.temperature_min || 0),
-                    temp_max: Math.round(d.temp_max || d.temperature_max || 0),
-                    condition: d.condition || d.description || 'Nuageux'
-                  };
-                });
-              }
-            }
-          } catch (e) {
-            console.warn('Forecast API failed', e)
-            if (weatherData) {
-              weatherData.previsions = []
-            }
-          }
-
-          if (weatherData) {
-            setWeather(weatherData)
-          }
-        } catch (e) {
-          console.warn('Weather API not ready yet')
+          setWeather(weatherData)
         }
 
-        // Fetch recent measures
-        try {
-          const mesuresRes = await api.get('/mesures/recent')
-          if (mesuresRes.data.success) {
-            setMesures(mesuresRes.data.data)
-          }
-        } catch (e) {
-          console.warn('Mesures API not ready yet')
+        if (mesuresRes.status === 'fulfilled' && mesuresRes.value.data.success) {
+          setMesures(mesuresRes.value.data.data)
         }
 
       } catch (error) {

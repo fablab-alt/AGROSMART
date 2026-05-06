@@ -85,24 +85,16 @@ export function BenefitsSection() {
                                 <div className="border-t border-gray-200 pt-4">
                                     <p className="text-sm text-gray-600">
                                         <Star className="h-4 w-4 inline text-yellow-400 mr-1" />
-                                        Utilisé par 5000+ agriculteurs en Côte d'Ivoire
+                                        Utilisé par 5000+ agriculteurs en Côte d&apos;Ivoire
                                     </p>
                                 </div>
-                            </div>
-                        </div>
-                    </motion.div>
-                </div>
-            </div>
-        </section>
-    )
-}
                                 <div className="flex items-center gap-1 mb-8">
                                     {[1, 2, 3, 4, 5].map(s => <Star key={s} className="h-6 w-6 text-yellow-500 fill-yellow-500" />)}
                                 </div>
                                 <p className="text-xl text-gray-800 mb-8 italic leading-relaxed font-medium">
                                     &quot;Depuis que j&apos;utilise Agrosmart, j&apos;ai augmenté ma production de riz de 30%
                                     et j&apos;économise beaucoup d&apos;eau. L&apos;application est intuitive et les alertes
-                                    m&apos;ont permis de sauver ma récolte d'une attaque de chenilles.&quot;
+                                    m&apos;ont permis de sauver ma récolte d&apos;une attaque de chenilles.&quot;
                                 </p>
                                 <div className="flex items-center gap-4">
                                     <div className="h-14 w-14 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">

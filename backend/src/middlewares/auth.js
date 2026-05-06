@@ -217,7 +217,15 @@ const verifyRefreshToken = async (req, res, next) => {
     }
 
     if (tokenData.revoked) {
-      throw errors.unauthorized('Token de rafraîchissement révoqué');
+      // Token réutilisé après révocation — possible vol de token : révoquer toute la chaîne
+      logger.security('REFRESH_TOKEN_REUSE', {
+        userId: tokenData.userId,
+        tokenId: tokenData.id,
+        replacedBy: tokenData.replacedBy,
+        ip: req.ip
+      });
+      await revokeAllUserTokens(tokenData.userId);
+      throw errors.unauthorized('Token de rafraîchissement révoqué (réutilisation détectée)');
     }
 
     if (new Date(tokenData.expiresAt) < new Date()) {
@@ -283,17 +291,15 @@ const generateAccessToken = (user) => {
 /**
  * Générer un refresh token
  */
-const generateRefreshToken = async (userId) => {
-  // Générer un identifiant unique pour ce token (jti = JWT ID)
+const generateRefreshToken = async (userId, { oldTokenId = null } = {}) => {
   const jti = crypto.randomUUID();
-  
+
   const token = jwt.sign(
     { userId, type: 'refresh', jti },
     config.jwt.refreshSecret,
     { expiresIn: config.jwt.refreshExpiresIn }
   );
 
-  // Aligner l'expiration DB avec la config JWT (parser la durée)
   const expiresAt = new Date();
   const refreshDuration = config.jwt.refreshExpiresIn || '30d';
   const match = refreshDuration.match(/^(\d+)(d|h|m|s)$/);
@@ -307,17 +313,24 @@ const generateRefreshToken = async (userId) => {
       case 's': expiresAt.setSeconds(expiresAt.getSeconds() + value); break;
     }
   } else {
-    expiresAt.setDate(expiresAt.getDate() + 30); // fallback 30 jours
+    expiresAt.setDate(expiresAt.getDate() + 30);
   }
 
-  // Stocker en base de données
-  await prisma.refreshToken.create({
+  const newRecord = await prisma.refreshToken.create({
     data: {
       userId,
       token: hashRefreshToken(token),
       expiresAt
     }
   });
+
+  // Rotation: révoquer l'ancien token et enregistrer son successeur
+  if (oldTokenId) {
+    await prisma.refreshToken.update({
+      where: { id: oldTokenId },
+      data: { revoked: true, revokedAt: new Date(), replacedBy: newRecord.id }
+    });
+  }
 
   return token;
 };

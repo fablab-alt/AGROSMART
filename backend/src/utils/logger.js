@@ -15,6 +15,34 @@ const DailyRotateFile = require('winston-daily-rotate-file');
 const path = require('path');
 const config = require('../config');
 
+// ============================
+// Redaction PII
+// ============================
+const PII_KEYS = new Set(['password', 'passwordHash', 'token', 'accessToken', 'refreshToken', 'otp', 'secret', 'creditCard', 'cardNumber']);
+const PII_EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+const PII_PHONE_RE = /(\+?\d[\s\-.]?){8,14}\d/g;
+
+function redactPII(obj, depth = 0) {
+  if (depth > 6 || obj === null || obj === undefined) return obj;
+  if (typeof obj === 'string') {
+    return obj
+      .replace(PII_EMAIL_RE, (m) => m.slice(0, 2) + '***@***.' + m.split('.').pop())
+      .replace(PII_PHONE_RE, (m) => m.slice(0, 4) + '****' + m.slice(-2));
+  }
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(i => redactPII(i, depth + 1));
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = PII_KEYS.has(k.toLowerCase()) ? '[REDACTED]' : redactPII(v, depth + 1);
+  }
+  return out;
+}
+
+const piiRedactFormat = winston.format((info) => {
+  const { message, ...meta } = info;
+  return { ...redactPII(meta), message: typeof message === 'string' ? message : message };
+});
+
 // Niveaux de log personnalisés avec couleurs
 const customLevels = {
   levels: {
@@ -62,10 +90,11 @@ const customFormat = winston.format.combine(
   })
 );
 
-// Format JSON pour la production
+// Format JSON pour la production (avec redaction PII)
 const jsonFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
   winston.format.errors({ stack: true }),
+  piiRedactFormat(),
   winston.format.json()
 );
 

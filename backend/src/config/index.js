@@ -37,11 +37,15 @@ const config = {
 
   // JWT
   jwt: {
-    // Ne pas utiliser de valeur par défaut pour les secrets en production
     secret: process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? null : 'dev-only-secret-not-for-production'),
     refreshSecret: process.env.JWT_REFRESH_SECRET || (process.env.NODE_ENV === 'production' ? null : 'dev-only-refresh-secret-not-for-production'),
     expiresIn: process.env.JWT_EXPIRES_IN || '1h',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d'
+  },
+
+  // Cookies
+  cookie: {
+    secret: process.env.COOKIE_SECRET || (process.env.NODE_ENV === 'production' ? null : 'dev-only-cookie-secret-not-for-production')
   },
 
   // OTP
@@ -95,8 +99,9 @@ const config = {
 
   // Rate Limiting
   rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 1 * 60 * 1000, // 1 minute (reduced from 15 to clear bans faster)
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 2000 // Increased limit
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 1 * 60 * 1000,
+    // Default 300/min par IP — à configurer via RATE_LIMIT_MAX_REQUESTS en prod
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 300
   },
 
   // CORS
@@ -142,9 +147,8 @@ if (config.isProd) {
   const requiredEnvVars = [
     'JWT_SECRET',
     'JWT_REFRESH_SECRET',
+    'COOKIE_SECRET',
     'DB_PASSWORD',
-    // 'TWILIO_ACCOUNT_SID',  // Optionnel - SMS/WhatsApp non activé pour l'instant
-    // 'TWILIO_AUTH_TOKEN',   // Optionnel - SMS/WhatsApp non activé pour l'instant
   ];
 
   const missingVars = requiredEnvVars.filter(v => !process.env[v]);
@@ -153,22 +157,30 @@ if (config.isProd) {
     process.exit(1);
   }
 
-  // Vérifier la force du JWT_SECRET
-  if (config.jwt.secret && config.jwt.secret.length < 32) {
-    console.error('❌ ERREUR CRITIQUE: JWT_SECRET doit contenir au moins 32 caractères en production');
+  // Vérifier la force des secrets (minimum 64 caractères en prod)
+  if (config.jwt.secret && config.jwt.secret.length < 64) {
+    console.error('❌ ERREUR CRITIQUE: JWT_SECRET doit contenir au moins 64 caractères en production');
     process.exit(1);
   }
 
-  // Vérifier la force du JWT_REFRESH_SECRET
-  if (config.jwt.refreshSecret && config.jwt.refreshSecret.length < 32) {
-    console.error('❌ ERREUR CRITIQUE: JWT_REFRESH_SECRET doit contenir au moins 32 caractères en production');
+  if (config.jwt.refreshSecret && config.jwt.refreshSecret.length < 64) {
+    console.error('❌ ERREUR CRITIQUE: JWT_REFRESH_SECRET doit contenir au moins 64 caractères en production');
+    process.exit(1);
+  }
+
+  if (config.cookie.secret && config.cookie.secret.length < 32) {
+    console.error('❌ ERREUR CRITIQUE: COOKIE_SECRET doit contenir au moins 32 caractères en production');
     process.exit(1);
   }
 
   // Vérifier que les secrets ne sont pas les valeurs par défaut de développement
-  const devSecrets = ['dev-only-secret-not-for-production', 'dev-only-refresh-secret-not-for-production'];
-  if (devSecrets.includes(config.jwt.secret) || devSecrets.includes(config.jwt.refreshSecret)) {
-    console.error('❌ ERREUR CRITIQUE: Les secrets JWT utilisent les valeurs par défaut. Configurez JWT_SECRET et JWT_REFRESH_SECRET!');
+  const devSecrets = [
+    'dev-only-secret-not-for-production',
+    'dev-only-refresh-secret-not-for-production',
+    'dev-only-cookie-secret-not-for-production'
+  ];
+  if (devSecrets.includes(config.jwt.secret) || devSecrets.includes(config.jwt.refreshSecret) || devSecrets.includes(config.cookie.secret)) {
+    console.error('❌ ERREUR CRITIQUE: Les secrets utilisent les valeurs par défaut de dev. Configurez JWT_SECRET, JWT_REFRESH_SECRET et COOKIE_SECRET!');
     process.exit(1);
   }
 
@@ -183,14 +195,10 @@ if (config.isProd) {
   }
 }
 
-// Avertissements en développement
-if (config.isDev) {
-  if (!process.env.JWT_SECRET) {
-    console.warn('⚠️  DÉVELOPPEMENT: Utilisation du JWT_SECRET par défaut. Configurez JWT_SECRET pour plus de sécurité.');
-  }
-  if (!process.env.JWT_REFRESH_SECRET) {
-    console.warn('⚠️  DÉVELOPPEMENT: Utilisation du JWT_REFRESH_SECRET par défaut. Configurez JWT_REFRESH_SECRET pour plus de sécurité.');
-  }
+// Avertissement si JWT_SECRET absent en développement
+if (!config.isProd && !process.env.JWT_SECRET) {
+  console.warn('⚠️  DEV: JWT_SECRET non défini — utilisation de la valeur de développement. Ne jamais utiliser en production.');
 }
+
 
 module.exports = config;

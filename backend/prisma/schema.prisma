@@ -936,19 +936,20 @@ model UserBadge {
 }
 
 model RefreshToken {
-  id        String    @id @default(uuid())
-  userId    String    @map("user_id")
-  token     String    @db.Text
-  expiresAt DateTime  @map("expires_at")
-  revoked   Boolean   @default(false)
-  revokedAt DateTime? @map("revoked_at")
-  createdAt DateTime  @default(now()) @map("created_at")
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  token       String    @db.Text
+  expiresAt   DateTime  @map("expires_at")
+  revoked     Boolean   @default(false)
+  revokedAt   DateTime? @map("revoked_at")
+  replacedBy  String?   @map("replaced_by") // ID du nouveau token créé lors de la rotation
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([token(length: 100)]) // Index partiel pour recherche rapide du token
-  @@index([userId, revoked]) // Index pour tokens actifs par utilisateur
+  @@index([token(length: 100)])
+  @@index([userId, revoked])
   @@map("refresh_tokens")
 }
 

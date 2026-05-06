@@ -9,6 +9,15 @@ const API_URL = normalized.endsWith('/api/v1') ? normalized : `${normalized}/api
 function clearPersistedAuth(): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem('auth-storage')
+  // Reset Zustand in-memory auth state to prevent context leak after 401
+  // Lazy import avoids circular dependency (store.ts does not import api.ts)
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAuthStore } = require('@/lib/store')
+    useAuthStore.getState().logout()
+  } catch {
+    // no-op if store not yet initialised (SSR)
+  }
 }
 
 // Créer l'instance axios — withCredentials envoie les cookies HttpOnly automatiquement

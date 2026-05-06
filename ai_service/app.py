@@ -1,6 +1,8 @@
 import os
 import logging
 from flask import Flask, request, jsonify
+from flask_cors import CORS
+from functools import wraps
 
 # =====================================================
 # Importations optionnelles (TensorFlow lourd)
@@ -33,6 +35,32 @@ logging.basicConfig(
 logger = logging.getLogger('ai_service')
 
 app = Flask(__name__)
+
+# =====================================================
+# CORS — restreint aux origines backend autorisées
+# =====================================================
+_allowed_origins = os.environ.get('CORS_ORIGIN', 'http://localhost:8000').split(',')
+CORS(app, origins=[o.strip() for o in _allowed_origins], supports_credentials=False)
+
+# =====================================================
+# Authentification inter-services (X-Internal-Token)
+# =====================================================
+_INTERNAL_TOKEN = os.environ.get('AI_INTERNAL_TOKEN', '')
+
+def require_internal_token(f):
+    """Middleware : vérifie X-Internal-Token pour les endpoints de prédiction."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not _INTERNAL_TOKEN:
+            # Si le token n'est pas configuré, autoriser uniquement en dev
+            if os.environ.get('FLASK_ENV', 'production') == 'production':
+                return jsonify({'error': 'AI_INTERNAL_TOKEN not configured'}), 500
+            return f(*args, **kwargs)
+        token = request.headers.get('X-Internal-Token', '')
+        if token != _INTERNAL_TOKEN:
+            return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 # =====================================================
 # Configuration & Constantes
@@ -143,6 +171,7 @@ def health_check():
 
 
 @app.route('/predict/disease', methods=['POST'])
+@require_internal_token
 def predict_disease():
     # --- Validate file presence ---
     if 'image' not in request.files:
@@ -196,6 +225,7 @@ def predict_disease():
 
 
 @app.route('/predict/irrigation', methods=['POST'])
+@require_internal_token
 def predict_irrigation():
     data = request.get_json(silent=True)
 
@@ -237,4 +267,11 @@ def predict_irrigation():
 load_models()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+    # Ce bloc ne s'exécute qu'en développement local direct.
+    # En production, utiliser : gunicorn -w 2 -b 0.0.0.0:5001 --timeout 120 app:app
+    if os.environ.get('FLASK_ENV') == 'production':
+        raise RuntimeError(
+            'Ne pas lancer app.py directement en production. '
+            'Utiliser : gunicorn -w 2 -b 0.0.0.0:5001 --timeout 120 app:app'
+        )
+    app.run(host='0.0.0.0', port=5001, debug=False)

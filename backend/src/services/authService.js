@@ -58,10 +58,8 @@ class AuthService {
         const salt = await bcrypt.genSalt(12);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Statut initial : ACTIF par défaut
-        // OTP/Twilio non configuré → on active directement le compte à l'inscription
-        // TODO: Remettre EN_ATTENTE une fois que la vérification OTP/Email sera activée
-        const initialStatus = 'ACTIF';
+        // Statut initial : EN_ATTENTE — le compte doit être vérifié via OTP avant d'être activé.
+        const initialStatus = 'EN_ATTENTE';
 
         // Insertion - Les champs agricoles ne sont pertinents que pour les producteurs
         const user = await prisma.user.create({

@@ -63,7 +63,7 @@ exports.getConversation = async (req, res, next) => {
   try {
     const { userId } = req.params;
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const offset = (page - 1) * limit;
     const currentUserId = req.user.id;
 

@@ -150,7 +150,7 @@ export default function RegisterPage() {
       const response = await authApi.verifyOtp({ telephone: getValues('telephone'), otp: otpCode })
 
       if (response.data.success) {
-        login(response.data.data.user, response.data.data.accessToken)
+        login(response.data.data.user)
         toast.success('Compte vérifié avec succès!')
         router.push('/dashboard')
       } else {

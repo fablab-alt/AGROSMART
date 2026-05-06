@@ -203,21 +203,11 @@ exports.refreshToken = async (req, res, next) => {
     const user = req.user;
     const oldRefreshTokenId = req.refreshTokenId;
 
-    // Révoquer l'ancien refresh token (rotation)
-    if (oldRefreshTokenId) {
-      await prisma.refreshToken.update({
-        where: { id: oldRefreshTokenId },
-        data: { revoked: true, revokedAt: new Date() }
-      }).catch(() => {
-        // Ignorer les erreurs si le token n'existe plus
-      });
-    }
-
     // Générer un nouveau token d'accès
     const accessToken = generateAccessToken(user);
 
-    // Générer un nouveau refresh token (rotation)
-    const newRefreshToken = await generateRefreshToken(user.id);
+    // Rotation atomique: génère le nouveau token ET révoque l'ancien (avec replacedBy)
+    const newRefreshToken = await generateRefreshToken(user.id, { oldTokenId: oldRefreshTokenId });
 
     logger.audit('Token rafraîchi avec rotation', {
       userId: user.id,

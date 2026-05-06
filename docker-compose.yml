@@ -23,8 +23,10 @@ services:
       DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT}
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      COOKIE_SECRET: ${COOKIE_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN}
+      AI_INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       CORS_ORIGIN: ${CORS_ORIGIN}
       ALLOW_LOCALHOST_CORS: 'false'
@@ -50,6 +52,7 @@ services:
       TWILIO_WHATSAPP_NUMBER: ${TWILIO_WHATSAPP_NUMBER}
       IOT_GATEWAY_SECRET: ${IOT_GATEWAY_SECRET}
       LORA_NETWORK_KEY: ${LORA_NETWORK_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       TZ: ${TZ}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -72,6 +75,9 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - app-network
       - traefik-network
@@ -82,6 +88,26 @@ services:
       - "traefik.http.routers.agrosmart-backend.entrypoints=websecure"
       - "traefik.http.routers.agrosmart-backend.tls.certresolver=letsencrypt"
       - "traefik.http.services.agrosmart-backend.loadbalancer.server.port=${BACKEND_PORT}"
+
+  redis:
+    image: redis:7-alpine
+    container_name: agrosmart-redis
+    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+    expose:
+      - "6379"
+    restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
 
   frontend:
     build:
@@ -134,6 +160,7 @@ services:
 volumes:
   backend_uploads:
   backend_logs:
+  redis_data:
 
 networks:
   app-network:

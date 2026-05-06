@@ -14,7 +14,7 @@ const logger = require('../utils/logger');
 exports.getAll = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
     const { role, status, search } = req.query;
 
@@ -128,7 +128,7 @@ exports.getStats = async (req, res, next) => {
 exports.getProducteurs = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
 
     // Get producteurs with parcelles aggregation
@@ -438,7 +438,7 @@ exports.getParcelles = async (req, res, next) => {
 exports.getAlertes = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const limit = parseInt(req.query.limit) || 50;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
 
     const alertes = await prisma.alerte.findMany({
       where: { userId: id },

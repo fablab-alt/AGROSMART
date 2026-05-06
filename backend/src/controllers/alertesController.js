@@ -15,7 +15,7 @@ const notificationService = require('../services/notificationService');
 exports.getAll = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
     const { categorie, niveau, statut } = req.query;
 
@@ -238,11 +238,14 @@ exports.getById = async (req, res, next) => {
 
     const alerte = await prisma.alerte.findUnique({
       where: { id },
-      // include: { parcelle: ... } // Removed
     });
 
     if (!alerte) {
       throw errors.notFound('Alerte non trouvée');
+    }
+
+    if (req.user.role === ROLES.PRODUCTEUR && alerte.userId !== req.user.id) {
+      throw errors.forbidden('Accès non autorisé à cette alerte');
     }
 
     res.json({
@@ -261,9 +264,16 @@ exports.markAsRead = async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // Ownership check before marking as read
+    const existing = await prisma.alerte.findUnique({ where: { id }, select: { userId: true } });
+    if (!existing) throw errors.notFound('Alerte non trouvée');
+    if (req.user.role === ROLES.PRODUCTEUR && existing.userId !== req.user.id) {
+      throw errors.forbidden('Modification non autorisée');
+    }
+
     const alerte = await prisma.alerte.update({
       where: { id },
-      data: { statut: 'LUE' } // Changed from luAt: new Date()
+      data: { statut: 'LUE' }
     });
 
     if (!alerte) {

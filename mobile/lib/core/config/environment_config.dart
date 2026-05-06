@@ -102,14 +102,15 @@ class EnvironmentConfig {
   }
 
   /// Timeout de connexion (secondes)
+  /// En Côte d'Ivoire, le réseau rural peut être lent — on alloue 30s partout.
   static int get connectionTimeout {
     switch (_currentEnvironment) {
       case Environment.development:
         return 30;
       case Environment.staging:
-        return 15;
+        return 30;
       case Environment.production:
-        return 10;
+        return 30;
     }
   }
 
@@ -117,11 +118,11 @@ class EnvironmentConfig {
   static int get receiveTimeout {
     switch (_currentEnvironment) {
       case Environment.development:
-        return 30;
+        return 60;
       case Environment.staging:
-        return 15;
+        return 60;
       case Environment.production:
-        return 10;
+        return 60;
     }
   }
 
@@ -130,11 +131,14 @@ class EnvironmentConfig {
     return _currentEnvironment == Environment.production;
   }
 
-  /// SHA256 des certificats pour le pinning
+  /// SHA256 des certificats pour le pinning.
+  /// Générer avec : openssl s_client -connect api.agrosmart.voisilab.online:443 </dev/null | \
+  ///   openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | \
+  ///   openssl dgst -sha256 -binary | openssl enc -base64
   static List<String> get certificateSha256Fingerprints {
     return [
-      // À remplacer par les vrais fingerprints du certificat SSL de production
-      'sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      // TODO : remplacer ces valeurs par les vrais fingerprints avant la mise en prod.
+      'sha256/REPLACE_WITH_REAL_CERTIFICATE_SHA256_FINGERPRINT=',
     ];
   }
 

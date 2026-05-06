@@ -64,7 +64,7 @@ exports.exportData = async (req, res, next) => {
 exports.getAll = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
     const { statut, type_sol, search } = req.query;
 
@@ -356,7 +356,12 @@ exports.getById = async (req, res, next) => {
       throw errors.notFound('Parcelle non trouvée');
     }
 
-    // Get sensor count 
+    // Ownership check — PRODUCTEUR can only see their own parcelles
+    if (req.user.role === ROLES.PRODUCTEUR && parcelle.userId !== req.user.id) {
+      throw errors.forbidden('Accès non autorisé à cette parcelle');
+    }
+
+    // Get sensor count
     const stations = await prisma.station.findMany({
       where: { parcelleId: id },
       include: {
@@ -394,6 +399,13 @@ exports.update = async (req, res, next) => {
     const { id } = req.params;
     const { nom, superficie, latitude, longitude, type_sol, culture, status, date_plantation } = req.body;
 
+    // Ownership check before update
+    if (req.user.role === ROLES.PRODUCTEUR) {
+      const existing = await prisma.parcelle.findUnique({ where: { id }, select: { userId: true } });
+      if (!existing) throw errors.notFound('Parcelle non trouvée');
+      if (existing.userId !== req.user.id) throw errors.forbidden('Modification non autorisée');
+    }
+
     const updated = await prisma.parcelle.update({
       where: { id },
       data: {
@@ -427,20 +439,13 @@ exports.delete = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Hard delete or Soft delete? Schema has 'statut'. Let's use soft delete via update.
-    // BUT if we want to delete, we can also use delete() if relations permit (cascade).
-    // Using soft delete:
-    const updated = await prisma.parcelle.update({
-      where: { id },
-      data: {
-        statut: 'RECOLTE', // Or create a 'DELETED' status if exists? Schema: ACTIVE, EN_REPOS, PREPAREE, ENSEMENCEE, EN_CROISSANCE, RECOLTE. No INACTIVE.
-        // Let's assume we shouldn't delete, just mark as RECOLTE or something?
-        // Or simply delete().
-        // Controller previously tried 'INACTIVE' which doesn't exist in Enum!
-        // Let's use prisma.parcelle.delete() for now, as existing code might be old.
-      }
-    });
-    // Actually, let's use delete()
+    // Ownership check before delete
+    if (req.user.role === ROLES.PRODUCTEUR) {
+      const existing = await prisma.parcelle.findUnique({ where: { id }, select: { userId: true } });
+      if (!existing) throw errors.notFound('Parcelle non trouvée');
+      if (existing.userId !== req.user.id) throw errors.forbidden('Suppression non autorisée');
+    }
+
     await prisma.parcelle.delete({ where: { id } });
 
     logger.audit('Suppression parcelle', { userId: req.user.id, parcelleId: id });
@@ -489,7 +494,7 @@ exports.getStations = async (req, res, next) => {
 exports.getMesures = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const limit = parseInt(req.query.limit) || 100;
+    const limit = Math.min(parseInt(req.query.limit) || 100, 100);
 
     const mesures = await prisma.mesure.findMany({
       where: {

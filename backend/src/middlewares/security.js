@@ -13,31 +13,49 @@
  */
 
 const logger = require('../utils/logger');
-
-/**
- * Cache pour le suivi des tentatives de connexion
- * Format: { ip: { count: number, lastAttempt: Date, blocked: boolean } }
- */
-const loginAttempts = new Map();
-
-// Nettoyage périodique des tentatives expirées (évite les fuites mémoire)
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, data] of loginAttempts.entries()) {
-    if (now - data.lastAttempt > BRUTE_FORCE_CONFIG.windowMs) {
-      loginAttempts.delete(key);
-    }
-  }
-}, 5 * 60 * 1000); // Nettoyage toutes les 5 minutes
+const redisClient = require('../config/redis');
 
 /**
  * Configuration par défaut de la protection brute-force
  */
 const BRUTE_FORCE_CONFIG = {
-  maxAttempts: 5,          // Nombre max de tentatives
-  windowMs: 15 * 60 * 1000, // Fenêtre de 15 minutes
-  blockDuration: 30 * 60 * 1000, // Blocage de 30 minutes
+  maxAttempts: 5,
+  windowMs: 15 * 60 * 1000,   // 15 minutes
+  blockDuration: 30 * 60 * 1000, // 30 minutes
 };
+
+// Fallback en mémoire quand Redis n'est pas disponible
+const loginAttempts = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, data] of loginAttempts.entries()) {
+    if (now - data.lastAttempt > BRUTE_FORCE_CONFIG.windowMs) loginAttempts.delete(key);
+  }
+}, 5 * 60 * 1000);
+
+// ── Helpers Redis brute-force ───────────────────────────────────────────────
+const BF_PREFIX = 'bf:';
+
+async function bfGet(ip) {
+  if (!redisClient) return loginAttempts.get(ip) || null;
+  try {
+    const raw = await redisClient.get(`${BF_PREFIX}${ip}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return loginAttempts.get(ip) || null; }
+}
+
+async function bfSet(ip, data, ttlMs) {
+  if (!redisClient) { loginAttempts.set(ip, data); return; }
+  try {
+    await redisClient.set(`${BF_PREFIX}${ip}`, JSON.stringify(data), 'PX', ttlMs);
+  } catch { loginAttempts.set(ip, data); }
+}
+
+async function bfDel(ip) {
+  if (!redisClient) { loginAttempts.delete(ip); return; }
+  try { await redisClient.del(`${BF_PREFIX}${ip}`); }
+  catch { loginAttempts.delete(ip); }
+}
 
 /**
  * Nettoie les entrées utilisateur pour prévenir les attaques XSS
@@ -118,29 +136,19 @@ const sanitizeObject = (obj) => {
  * @returns {Function} Middleware Express
  */
 const bruteForceProtection = (options = {}) => {
-  const config = { ...BRUTE_FORCE_CONFIG, ...options };
+  const cfg = { ...BRUTE_FORCE_CONFIG, ...options };
 
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress;
     const now = Date.now();
 
-    // Nettoyer les anciennes entrées
-    for (const [key, data] of loginAttempts.entries()) {
-      if (now - data.lastAttempt > config.windowMs) {
-        loginAttempts.delete(key);
-      }
-    }
+    const attemptData = await bfGet(ip);
 
-    // Vérifier si l'IP est bloquée
-    const attemptData = loginAttempts.get(ip);
-    
-    if (attemptData) {
-      // Vérifier si le blocage est toujours actif
-      if (attemptData.blocked && (now - attemptData.blockedAt < config.blockDuration)) {
-        const remainingTime = Math.ceil((config.blockDuration - (now - attemptData.blockedAt)) / 60000);
-        
-        logger.warn(`Brute-force: IP ${ip} bloquée - ${remainingTime} minutes restantes`);
-        
+    if (attemptData?.blocked) {
+      const elapsed = now - attemptData.blockedAt;
+      if (elapsed < cfg.blockDuration) {
+        const remainingTime = Math.ceil((cfg.blockDuration - elapsed) / 60000);
+        logger.warn(`Brute-force: IP ${ip} bloquée - ${remainingTime} min restantes`);
         return res.status(429).json({
           success: false,
           message: `Trop de tentatives. Réessayez dans ${remainingTime} minutes.`,
@@ -148,32 +156,24 @@ const bruteForceProtection = (options = {}) => {
           retryAfter: remainingTime * 60
         });
       }
-
-      // Si le blocage a expiré, réinitialiser
-      if (attemptData.blocked && (now - attemptData.blockedAt >= config.blockDuration)) {
-        loginAttempts.delete(ip);
-      }
+      // Blocage expiré
+      await bfDel(ip);
     }
 
-    // Attacher les fonctions de suivi à la requête
-    req.trackLoginAttempt = (success) => {
+    req.trackLoginAttempt = async (success) => {
       if (success) {
-        // Réinitialiser en cas de succès
-        loginAttempts.delete(ip);
-      } else {
-        // Incrémenter le compteur en cas d'échec
-        const current = loginAttempts.get(ip) || { count: 0, lastAttempt: now };
-        current.count += 1;
-        current.lastAttempt = now;
-
-        if (current.count >= config.maxAttempts) {
-          current.blocked = true;
-          current.blockedAt = now;
-          logger.warn(`Brute-force: IP ${ip} bloquée après ${current.count} tentatives`);
-        }
-
-        loginAttempts.set(ip, current);
+        await bfDel(ip);
+        return;
       }
+      const current = (await bfGet(ip)) || { count: 0, lastAttempt: now };
+      current.count += 1;
+      current.lastAttempt = now;
+      if (current.count >= cfg.maxAttempts) {
+        current.blocked = true;
+        current.blockedAt = now;
+        logger.warn(`Brute-force: IP ${ip} bloquée après ${current.count} tentatives`);
+      }
+      await bfSet(ip, current, cfg.blockDuration + cfg.windowMs);
     };
 
     next();
