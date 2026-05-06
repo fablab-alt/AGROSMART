@@ -30,19 +30,29 @@ const securityHeaders = [
     value: 'off',
   },
   {
-    // CSP : ajuster les sources API/socket selon votre domaine de déploiement.
-    // NEXT_PUBLIC_API_URL est injecté au build. Fallback permissif pour le dev.
+    // CSP différenciée dev (unsafe-eval requis par Turbopack) vs prod (strict).
     key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // unsafe-eval requis par Next.js dev + recharts
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https:",
-      "font-src 'self' data:",
-      "connect-src 'self' ws: wss: https:",
-      "media-src 'self' blob:",
-      "frame-ancestors 'none'",
-    ].join('; '),
+    value: process.env.NODE_ENV === 'production'
+      ? [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: blob: https:",
+          "font-src 'self' data:",
+          "connect-src 'self' wss: https:",
+          "media-src 'self' blob:",
+          "frame-ancestors 'none'",
+        ].join('; ')
+      : [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: blob: https:",
+          "font-src 'self' data:",
+          "connect-src 'self' ws: wss: https:",
+          "media-src 'self' blob:",
+          "frame-ancestors 'none'",
+        ].join('; '),
   },
 ];
 

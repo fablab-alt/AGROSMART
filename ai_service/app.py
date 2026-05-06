@@ -269,7 +269,7 @@ load_models()
 if __name__ == '__main__':
     # Ce bloc ne s'exécute qu'en développement local direct.
     # En production, utiliser : gunicorn -w 2 -b 0.0.0.0:5001 --timeout 120 app:app
-    if os.environ.get('FLASK_ENV') == 'production':
+    if os.environ.get('FLASK_ENV', 'production') != 'development':
         raise RuntimeError(
             'Ne pas lancer app.py directement en production. '
             'Utiliser : gunicorn -w 2 -b 0.0.0.0:5001 --timeout 120 app:app'

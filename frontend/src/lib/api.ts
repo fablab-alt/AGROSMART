@@ -8,6 +8,7 @@ const API_URL = normalized.endsWith('/api/v1') ? normalized : `${normalized}/api
 
 function clearPersistedAuth(): void {
   if (typeof window === 'undefined') return
+  _csrfToken = null
   localStorage.removeItem('auth-storage')
   // Reset Zustand in-memory auth state to prevent context leak after 401
   // Lazy import avoids circular dependency (store.ts does not import api.ts)
@@ -30,18 +31,38 @@ const api: AxiosInstance = axios.create({
   },
 })
 
-// Intercepteur de requête — mode découverte uniquement
+// ── CSRF double-submit cookie ──────────────────────────────────────────────
+// Auth routes are exempt on the backend — skip fetching the token for them.
+const CSRF_EXEMPT_URLS = ['/auth/login', '/auth/register', '/auth/verify-otp', '/auth/resend-otp', '/auth/refresh', '/auth/forgot-password', '/auth/reset-password']
+const MUTATION_METHODS = new Set(['post', 'put', 'patch', 'delete'])
+let _csrfToken: string | null = null
+
+async function getCsrfToken(): Promise<string> {
+  if (_csrfToken) return _csrfToken
+  const res = await axios.get(`${API_URL}/csrf-token`, { withCredentials: true })
+  _csrfToken = res.data?.csrfToken ?? null
+  return _csrfToken as string
+}
+
+// Intercepteur de requête — CSRF + mode découverte
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const isAuthRequest = config.url?.includes('/auth/login') ||
-      config.url?.includes('/auth/register') ||
-      config.url?.includes('/auth/verify-otp') ||
-      config.url?.includes('/auth/resend-otp') ||
-      config.url?.includes('/auth/refresh');
+  async (config: InternalAxiosRequestConfig) => {
+    const isAuthRequest = CSRF_EXEMPT_URLS.some(u => config.url?.includes(u))
 
     if (isDiscoveryModeEnabled() && !isReadOnlyHttpMethod(config.method) && !isAuthRequest) {
       return Promise.reject(new Error('Mode découverte: cette action est limitée à la lecture seule.'))
     }
+
+    // Inject CSRF token on mutations (non-auth only)
+    if (MUTATION_METHODS.has((config.method ?? '').toLowerCase()) && !isAuthRequest) {
+      try {
+        const token = await getCsrfToken()
+        if (token) config.headers['X-CSRF-Token'] = token
+      } catch {
+        // Non-blocking: server will reject if token truly required
+      }
+    }
+
     return config
   },
   (error) => Promise.reject(error)

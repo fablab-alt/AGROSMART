@@ -1,7 +1,6 @@
 require('dotenv').config();
 const mqtt = require('mqtt');
 const http = require('http');
-const crypto = require('crypto');
 
 // ============================
 // Constantes de sécurité

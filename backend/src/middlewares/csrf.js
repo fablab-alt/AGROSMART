@@ -22,15 +22,15 @@ const logger = require('../utils/logger');
 const CSRF_COOKIE = 'csrf_token';
 const CSRF_HEADER = 'x-csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+// req.path strips the mount prefix (/api/v1) when middleware is mounted via app.use('/api/v1', ...)
 const EXEMPT_PATHS = new Set([
-  '/api/v1/auth/login',
-  '/api/v1/auth/register',
-  '/api/v1/auth/refresh',
-  '/api/v1/auth/forgot-password',
-  '/api/v1/auth/reset-password',
-  '/api/v1/auth/verify-otp',
-  '/health',
-  '/readiness',
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/verify-otp',
+  '/auth/resend-otp',
 ]);
 
 /**
@@ -67,7 +67,9 @@ const csrfProtection = (req, res, next) => {
   if (EXEMPT_PATHS.has(req.path)) return next();
 
   const cookieToken = req.cookies?.[CSRF_COOKIE];
-  const headerToken = req.headers[CSRF_HEADER];
+  // x-csrf-token can be a string or an array (duplicate headers) — normalise to string
+  const rawHeader = req.headers[CSRF_HEADER];
+  const headerToken = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
 
   if (!cookieToken || !headerToken) {
     logger.warn('CSRF: token manquant', { path: req.path, method: req.method, ip: req.ip });
@@ -77,8 +79,18 @@ const csrfProtection = (req, res, next) => {
     });
   }
 
+  // Guard lengths before timingSafeEqual (throws on unequal buffer sizes → DoS)
+  if (typeof cookieToken !== 'string' || typeof headerToken !== 'string' ||
+      cookieToken.length !== 64 || headerToken.length !== 64) {
+    logger.warn('CSRF: token malformé', { path: req.path, method: req.method, ip: req.ip });
+    return res.status(403).json({
+      success: false,
+      error: { code: 'CSRF_TOKEN_INVALID', message: 'Token CSRF invalide.' }
+    });
+  }
+
   // Comparaison en temps constant pour éviter les timing attacks
-  if (!crypto.timingSafeEqual(Buffer.from(cookieToken), Buffer.from(headerToken))) {
+  if (!crypto.timingSafeEqual(Buffer.from(cookieToken, 'hex'), Buffer.from(headerToken, 'hex'))) {
     logger.warn('CSRF: token invalide', { path: req.path, method: req.method, ip: req.ip });
     return res.status(403).json({
       success: false,
