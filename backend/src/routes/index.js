@@ -114,15 +114,15 @@ router.use('/demo', demoRoutes);
 // ROUTES UTILITAIRES
 // =====================================================
 
+// Liveness — le processus tourne (utilisé par Docker healthcheck)
 router.get('/health', (req, res) => {
   const config = require('../config');
   const response = {
     success: true,
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: process.env.APP_VERSION || '1.0.0'
   };
-  // N'exposer les détails serveur qu'en dev
   if (!config.isProd) {
     response.uptime = process.uptime();
     response.memory = process.memoryUsage();
@@ -130,11 +130,32 @@ router.get('/health', (req, res) => {
   res.json(response);
 });
 
+// Readiness — le service est prêt à accepter des requêtes (DB + dépendances)
+router.get('/readiness', async (req, res) => {
+  const prisma = require('../config/prisma');
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      success: true,
+      status: 'ready',
+      timestamp: new Date().toISOString(),
+      checks: { database: 'ok' }
+    });
+  } catch (err) {
+    res.status(503).json({
+      success: false,
+      status: 'not_ready',
+      timestamp: new Date().toISOString(),
+      checks: { database: 'error' }
+    });
+  }
+});
+
 router.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Bienvenue sur l\'API AgroSmart',
-    version: '1.0.0',
+    version: process.env.APP_VERSION || '1.0.0',
     documentation: '/api/docs'
   });
 });

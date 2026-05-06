@@ -123,7 +123,7 @@ export default function RegisterPage() {
           setRequiresOtp(true)
           toast.success('Code OTP envoyé par SMS')
         } else {
-          login(response.data.data.user, response.data.data.accessToken)
+          login(response.data.data.user)
           toast.success('Compte créé avec succès!')
           router.push('/dashboard')
         }

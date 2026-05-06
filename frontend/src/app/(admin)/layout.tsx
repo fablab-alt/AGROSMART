@@ -46,7 +46,7 @@ export default function AdminLayout({
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { isAuthenticated, user, logout, token } = useAuthStore()
+  const { isAuthenticated, user, logout } = useAuthStore()
   const { theme, setTheme } = useUIStore()
   const [mounted, setMounted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -77,7 +77,7 @@ export default function AdminLayout({
         return
       }
 
-      if (!isAuthenticated && !token) {
+      if (!isAuthenticated) {
         router.push('/login')
         return
       }
@@ -87,7 +87,7 @@ export default function AdminLayout({
         router.push('/dashboard')
       }
     }
-  }, [mounted, isAuthenticated, token, user, router])
+  }, [mounted, isAuthenticated, user, router])
 
   const handleLogout = () => {
     logout()

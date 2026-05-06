@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -38,17 +38,7 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   })
 
-  // Debug: log validation errors
-  useEffect(() => {
-    if (Object.keys(errors).length > 0) {
-      console.log('Validation errors:', errors)
-    }
-  }, [errors])
-
-  const [debugMessage, setDebugMessage] = useState<string>('')
-
   const onSubmit = async (data: LoginFormData) => {
-    setDebugMessage('Soumission en cours...')
     setLoginError(null)
     setIsLoading(true)
     try {
@@ -59,11 +49,9 @@ export default function LoginPage() {
           setRequiresOtp(true)
           toast.success('Code OTP envoyé par SMS')
         } else {
-          setDebugMessage('Connexion réussie! Redirection...')
-          login(response.data.data.user, response.data.data.accessToken, response.data.data.refreshToken)
+          login(response.data.data.user)
           toast.success('Connexion réussie!')
 
-          // Rediriger vers le dashboard admin si l'utilisateur est admin
           const userRole = response.data.data.user.role?.toUpperCase()
           if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
             router.push('/admin')
@@ -74,7 +62,6 @@ export default function LoginPage() {
       } else {
         const errorMsg = response.data.message || 'Identifiants incorrects'
         setLoginError(errorMsg)
-        setDebugMessage('Échec: ' + errorMsg)
         toast.error(errorMsg)
       }
     } catch (error: unknown) {
@@ -88,7 +75,6 @@ export default function LoginPage() {
       }
 
       setLoginError(errorMessage)
-      setDebugMessage('Erreur: ' + errorMessage)
       toast.error(errorMessage)
     } finally {
       setIsLoading(false)
@@ -107,7 +93,7 @@ export default function LoginPage() {
       const response = await authApi.verifyOtp({ telephone: getValues('identifier'), otp: otpCode })
 
       if (response.data.success) {
-        login(response.data.data.user, response.data.data.accessToken, response.data.data.refreshToken)
+        login(response.data.data.user)
         toast.success('Connexion réussie!')
         router.push('/dashboard')
       } else {

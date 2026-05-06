@@ -19,6 +19,40 @@ const authService = require('../services/authService');
 const smsService = require('../services/smsService');
 const emailService = require('../services/emailService');
 
+const trackAuthAttempt = (req, success) => {
+  if (typeof req.trackLoginAttempt === 'function') {
+    req.trackLoginAttempt(success);
+  }
+};
+
+const COOKIE_OPTS_ACCESS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+  maxAge: 60 * 60 * 1000, // 1h
+  path: '/'
+};
+
+const COOKIE_OPTS_REFRESH = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+  maxAge: 30 * 24 * 60 * 60 * 1000, // 30j
+  path: '/api/v1/auth'
+};
+
+const setAuthCookies = (res, accessToken, refreshToken) => {
+  res.cookie('access_token', accessToken, COOKIE_OPTS_ACCESS);
+  if (refreshToken) {
+    res.cookie('refresh_token', refreshToken, COOKIE_OPTS_REFRESH);
+  }
+};
+
+const clearAuthCookies = (res) => {
+  res.clearCookie('access_token', { path: '/' });
+  res.clearCookie('refresh_token', { path: '/api/v1/auth' });
+};
+
 /**
  * Générer un code OTP à 6 chiffres
  */
@@ -32,22 +66,6 @@ const generateOtp = () => {
 exports.register = async (req, res, next) => {
   try {
     const result = await authService.registerUser(req.body);
-
-    if (result.isAutoLogin) {
-      return res.status(201).json({
-        success: true,
-        message: 'Compte créé avec succès!',
-        data: {
-          user: result.user,
-          accessToken: result.token,
-          refreshToken: result.refreshToken,
-          isDebug: result.isDebug
-        }
-      });
-    }
-
-    // Production: Envoi OTP (Simulation)
-    // await smsService.sendVerificationCode(result.user.telephone, '123456');
 
     res.status(201).json({
       success: true,
@@ -77,17 +95,22 @@ exports.login = async (req, res, next) => {
     }
 
     const result = await authService.loginUser({ login: userIdentifier, password });
+    trackAuthAttempt(req, true);
+
+    setAuthCookies(res, result.token, result.refreshToken);
 
     res.json({
       success: true,
       message: 'Connexion réussie',
       data: {
         user: result.user,
+        // Tokens also returned in body for mobile/API clients
         accessToken: result.token,
         refreshToken: result.refreshToken
       }
     });
   } catch (error) {
+    trackAuthAttempt(req, false);
     next(error);
   }
 };
@@ -114,34 +137,14 @@ exports.verifyOtp = async (req, res, next) => {
     }
 
     // Vérifier l'OTP
-    const otpData = await prisma.otpCode.findFirst({
-      where: {
-        userId: user.id,
-        code: otp,
-        used: false
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+    const verification = await authService.verifyOtp(user.id, otp);
 
-    if (!otpData) {
+    if (!verification?.valid) {
       throw errors.unauthorized('Code OTP invalide');
     }
 
-    // Vérifier l'expiration
-    if (new Date(otpData.expiresAt) < new Date()) {
-      throw errors.unauthorized('Code OTP expiré');
-    }
-
-    // Marquer l'OTP comme utilisé
-    await prisma.otpCode.update({
-      where: { id: otpData.id },
-      data: { used: true }
-    });
-
     // Si c'est une vérification d'inscription, activer le compte
-    if (otpData.type === 'REGISTER' && user.status === 'EN_ATTENTE') {
+    if (verification.type === 'REGISTER' && user.status === 'EN_ATTENTE') {
       await prisma.user.update({
         where: { id: user.id },
         data: { status: 'ACTIF' }
@@ -158,8 +161,11 @@ exports.verifyOtp = async (req, res, next) => {
       where: { id: user.id },
       data: { derniereConnexion: new Date() }
     });
+    trackAuthAttempt(req, true);
 
     logger.audit('Connexion réussie', { userId: user.id });
+
+    setAuthCookies(res, accessToken, refreshToken);
 
     res.json({
       success: true,
@@ -179,6 +185,7 @@ exports.verifyOtp = async (req, res, next) => {
       }
     });
   } catch (error) {
+    trackAuthAttempt(req, false);
     next(error);
   }
 };
@@ -212,14 +219,16 @@ exports.refreshToken = async (req, res, next) => {
     // Générer un nouveau refresh token (rotation)
     const newRefreshToken = await generateRefreshToken(user.id);
 
-    logger.audit('Token rafraîchi avec rotation', { 
+    logger.audit('Token rafraîchi avec rotation', {
       userId: user.id,
-      oldTokenRevoked: !!oldRefreshTokenId 
+      oldTokenRevoked: !!oldRefreshTokenId
     });
+
+    setAuthCookies(res, accessToken, newRefreshToken);
 
     res.json({
       success: true,
-      data: { 
+      data: {
         accessToken,
         refreshToken: newRefreshToken
       }
@@ -239,14 +248,17 @@ exports.refreshToken = async (req, res, next) => {
  */
 exports.logout = async (req, res, next) => {
   try {
-    const { refreshToken, allSessions = true } = req.body || {};
+    const { refreshToken: bodyRefreshToken, allSessions = true } = req.body || {};
     const { revokeTokenByString, revokeAllUserTokens } = require('../middlewares/auth');
+    // Accept refresh token from cookie or body
+    const refreshToken = req.cookies?.refresh_token || bodyRefreshToken;
+
+    clearAuthCookies(res);
 
     if (refreshToken && !allSessions) {
-      // Révoquer uniquement le refresh token fourni (déconnexion d'une seule session)
       const revoked = await revokeTokenByString(refreshToken);
-      
-      logger.audit('Déconnexion session unique', { 
+
+      logger.audit('Déconnexion session unique', {
         userId: req.user.id,
         tokenRevoked: revoked
       });
@@ -256,7 +268,6 @@ exports.logout = async (req, res, next) => {
         message: revoked ? 'Session déconnectée' : 'Session déjà déconnectée ou invalide'
       });
     } else {
-      // Révoquer tous les refresh tokens de l'utilisateur (déconnexion globale)
       await revokeAllUserTokens(req.user.id);
 
       logger.audit('Déconnexion globale', { userId: req.user.id });

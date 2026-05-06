@@ -15,7 +15,7 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const router = useRouter()
-  const { isAuthenticated, isLoading, token } = useAuthStore()
+  const { isAuthenticated, isLoading } = useAuthStore()
   const { theme } = useUIStore()
   const [mounted, setMounted] = useState(false)
   const [discoveryMode, setDiscoveryModeState] = useState(false)
@@ -51,11 +51,11 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (mounted && !isLoading) {
-      if (!discoveryMode && !isAuthenticated && !token) {
+      if (!discoveryMode && !isAuthenticated) {
         router.push('/login')
       }
     }
-  }, [mounted, discoveryMode, isAuthenticated, isLoading, token, router])
+  }, [mounted, discoveryMode, isAuthenticated, isLoading, router])
 
   if (!mounted) {
     return <LoadingOverlay message="Chargement..." />

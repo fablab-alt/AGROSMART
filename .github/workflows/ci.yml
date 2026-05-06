@@ -1,0 +1,178 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "Stone/**"]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ─────────────────────────────────────────
+  # Backend: lint + security audit
+  # ─────────────────────────────────────────
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Security audit (moderate+)
+        run: npm audit --audit-level=moderate --json > ../audit-backend.json || true
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-backend
+          path: audit-backend.json
+          retention-days: 30
+
+  # ─────────────────────────────────────────
+  # Frontend: lint + type-check + build
+  # ─────────────────────────────────────────
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3600
+          NEXT_PUBLIC_SOCKET_URL: ws://localhost:3600
+
+      - name: Security audit (moderate+)
+        run: npm audit --audit-level=moderate --json > ../audit-frontend.json || true
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-frontend
+          path: audit-frontend.json
+          retention-days: 30
+
+  # ─────────────────────────────────────────
+  # Smoke tests (endpoints critiques)
+  # ─────────────────────────────────────────
+  smoke:
+    name: Smoke tests API
+    runs-on: ubuntu-latest
+    needs: backend
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: agrismart_test
+          MYSQL_USER: agrismart
+          MYSQL_PASSWORD: agrismart
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Deploy migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: mysql://agrismart:agrismart@localhost:3306/agrismart_test
+
+      - name: Start server (background)
+        run: node src/server.js &
+        env:
+          NODE_ENV: test
+          PORT: 3600
+          DATABASE_URL: mysql://agrismart:agrismart@localhost:3306/agrismart_test
+          JWT_SECRET: ci-test-secret-32-chars-minimum-ok
+          JWT_REFRESH_SECRET: ci-test-refresh-secret-32-chars-ok
+          JWT_EXPIRES_IN: 1h
+          JWT_REFRESH_EXPIRES_IN: 30d
+          ALLOW_DEMO_START: "false"
+          ALLOW_LOCALHOST_CORS: "true"
+          LOG_LEVEL: error
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:3600/health && break
+            sleep 2
+          done
+
+      - name: Smoke — /health
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:3600/health)
+          [ "$STATUS" = "200" ] || (echo "Health check failed: $STATUS" && exit 1)
+
+      - name: Smoke — /api/v1/health
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:3600/api/v1/health)
+          [ "$STATUS" = "200" ] || (echo "API health check failed: $STATUS" && exit 1)
+
+      - name: Smoke — POST /api/v1/auth/login (rejects invalid creds)
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -X POST http://localhost:3600/api/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"identifier":"nobody@test.ci","password":"wrong"}')
+          [ "$STATUS" = "401" ] || [ "$STATUS" = "400" ] || [ "$STATUS" = "404" ] || \
+            (echo "Expected 4xx for invalid login, got: $STATUS" && exit 1)

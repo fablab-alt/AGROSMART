@@ -3,6 +3,7 @@
  * AgroSmart - Système Agricole Intelligent
  */
 
+const { Prisma } = require('@prisma/client');
 const prisma = require('../config/prisma');
 const config = require('../config');
 const { errors } = require('../middlewares/errorHandler');
@@ -272,13 +273,26 @@ exports.getAggregated = async (req, res, next) => {
   try {
     const { parcelle_id, capteur_id, type, periode = 'jour', debut, fin } = req.query;
 
-    const dateFormat = periode === 'heure' ? '%Y-%m-%d %H:00:00' : '%Y-%m-%d';
+    // dateFormat est entièrement contrôlé par notre code (jamais par l'input utilisateur)
+    const dateFormat = Prisma.raw(periode === 'heure' ? "'%Y-%m-%d %H:00:00'" : "'%Y-%m-%d'");
 
-    const paramsUnsafe = [debut ? new Date(debut) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), fin ? new Date(fin) : new Date()];
+    const startDate = debut ? new Date(debut) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const endDate = fin ? new Date(fin) : new Date();
 
-    let sql = `
-      SELECT 
-        DATE_FORMAT(m.timestamp, '${dateFormat}') as periode,
+    // Construire les conditions supplémentaires paramétrées
+    const extraClauses = [];
+    if (req.user.role === ROLES.PRODUCTEUR) extraClauses.push(Prisma.sql`AND p.user_id = ${req.user.id}`);
+    if (parcelle_id) extraClauses.push(Prisma.sql`AND p.id = ${parcelle_id}`);
+    if (capteur_id) extraClauses.push(Prisma.sql`AND c.id = ${capteur_id}`);
+    if (type) extraClauses.push(Prisma.sql`AND c.type = ${type}`);
+
+    const extraSql = extraClauses.length
+      ? Prisma.join(extraClauses, ' ')
+      : Prisma.empty;
+
+    const result = await prisma.$queryRaw(Prisma.sql`
+      SELECT
+        DATE_FORMAT(m.timestamp, ${dateFormat}) as periode,
         c.type as capteur_type,
         AVG(m.valeur) as moyenne,
         MIN(m.valeur) as min,
@@ -288,32 +302,11 @@ exports.getAggregated = async (req, res, next) => {
       JOIN capteurs c ON m.capteur_id = c.id
       JOIN stations s ON c.station_id = s.id
       JOIN parcelles p ON s.parcelle_id = p.id
-      WHERE m.timestamp >= ? AND m.timestamp <= ?
-    `;
-
-    if (req.user.role === ROLES.PRODUCTEUR) {
-      sql += ` AND p.user_id = ?`;
-      paramsUnsafe.push(req.user.id);
-    }
-
-    if (parcelle_id) {
-      sql += ` AND p.id = ?`;
-      paramsUnsafe.push(parcelle_id);
-    }
-
-    if (capteur_id) {
-      sql += ` AND c.id = ?`;
-      paramsUnsafe.push(capteur_id);
-    }
-
-    if (type) {
-      sql += ` AND c.type = ?`;
-      paramsUnsafe.push(type);
-    }
-
-    sql += ` GROUP BY periode, c.type ORDER BY periode DESC`;
-
-    const result = await prisma.$queryRawUnsafe(sql, ...paramsUnsafe);
+      WHERE m.timestamp >= ${startDate} AND m.timestamp <= ${endDate}
+      ${extraSql}
+      GROUP BY periode, c.type
+      ORDER BY periode DESC
+    `);
 
     // Map BigInts
     const data = result.map(row => ({

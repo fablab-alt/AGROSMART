@@ -17,10 +17,13 @@
  */
 
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const config = require('../config');
 const { AppError, errors } = require('./errorHandler');
 const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
+
+const hashRefreshToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 /**
  * Middleware pour vérifier le token JWT et authentifier l'utilisateur
@@ -50,14 +53,19 @@ const logger = require('../utils/logger');
  */
 const authenticate = async (req, res, next) => {
   try {
-    // Récupérer le token du header Authorization
-    const authHeader = req.headers.authorization;
+    // Lire le token depuis le cookie HttpOnly en priorité, puis le header Authorization (rétrocompatibilité)
+    let token = req.cookies?.access_token;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw errors.unauthorized('Token d\'authentification manquant');
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+      }
     }
 
-    const token = authHeader.split(' ')[1];
+    if (!token) {
+      throw errors.unauthorized('Token d\'authentification manquant');
+    }
 
     // Vérifier le token
     let decoded;
@@ -118,13 +126,17 @@ const authenticate = async (req, res, next) => {
  */
 const optionalAuth = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return next();
+    let token = req.cookies?.access_token;
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+      }
     }
 
-    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return next();
+    }
 
     try {
       const decoded = jwt.verify(token, config.jwt.secret);
@@ -174,7 +186,8 @@ const optionalAuth = async (req, res, next) => {
  */
 const verifyRefreshToken = async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
+    // Lire le refresh token depuis le cookie HttpOnly en priorité, puis le body (rétrocompatibilité)
+    const refreshToken = req.cookies?.refresh_token || req.body?.refreshToken;
 
     if (!refreshToken) {
       throw errors.badRequest('Token de rafraîchissement manquant');
@@ -189,8 +202,14 @@ const verifyRefreshToken = async (req, res, next) => {
     }
 
     // Vérifier que le token existe en base et n'est pas révoqué
+    const tokenHash = hashRefreshToken(refreshToken);
     const tokenData = await prisma.refreshToken.findFirst({
-      where: { token: refreshToken }
+      where: {
+        OR: [
+          { token: tokenHash }, // nouveau format (hashé)
+          { token: refreshToken } // compatibilité tokens historiques
+        ]
+      }
     });
 
     if (!tokenData) {
@@ -266,7 +285,7 @@ const generateAccessToken = (user) => {
  */
 const generateRefreshToken = async (userId) => {
   // Générer un identifiant unique pour ce token (jti = JWT ID)
-  const jti = require('crypto').randomUUID();
+  const jti = crypto.randomUUID();
   
   const token = jwt.sign(
     { userId, type: 'refresh', jti },
@@ -295,7 +314,7 @@ const generateRefreshToken = async (userId) => {
   await prisma.refreshToken.create({
     data: {
       userId,
-      token,
+      token: hashRefreshToken(token),
       expiresAt
     }
   });
@@ -322,7 +341,10 @@ const revokeRefreshToken = async (tokenId) => {
     // But usually we delete by token string match.
     // Let's assume tokenId is the actual token string.
     await prisma.refreshToken.updateMany({
-      where: { token: tokenId, revoked: false },
+      where: {
+        OR: [{ token: tokenId }, { token: hashRefreshToken(tokenId) }],
+        revoked: false
+      },
       data: { revoked: true, revokedAt: new Date() }
     });
   } catch (e) {
@@ -345,7 +367,10 @@ const revokeAllUserTokens = async (userId) => {
  */
 const revokeTokenByString = async (tokenString) => {
   const result = await prisma.refreshToken.updateMany({
-    where: { token: tokenString, revoked: false },
+    where: {
+      OR: [{ token: tokenString }, { token: hashRefreshToken(tokenString) }],
+      revoked: false
+    },
     data: { revoked: true, revokedAt: new Date() }
   });
   return result.count > 0;

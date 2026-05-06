@@ -114,54 +114,46 @@ export interface Formation {
 }
 
 // Auth Store
+// Les tokens JWT sont stockés exclusivement dans des cookies HttpOnly posés par le backend.
+// Seules les informations utilisateur (non sensibles) sont persistées côté client.
 interface AuthState {
   user: User | null
-  token: string | null
-  refreshToken: string | null
   isAuthenticated: boolean
   isLoading: boolean
   setUser: (user: User | null) => void
-  setToken: (token: string | null) => void
-  login: (user: User, token: string, refreshToken?: string) => void
+  login: (user: User) => void
   logout: () => void
   setLoading: (loading: boolean) => void
-  updateTokens: (token: string, refreshToken?: string) => void
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
-      token: null,
-      refreshToken: null,
       isAuthenticated: false,
       isLoading: true,
       setUser: (user) => set({ user, isAuthenticated: !!user }),
-      setToken: (token) => set({ token }),
-      login: (user, token, refreshToken) => {
+      login: (user) => {
         clearDiscoveryMode()
-        set({ user, token, refreshToken: refreshToken || null, isAuthenticated: true, isLoading: false })
+        set({ user, isAuthenticated: true, isLoading: false })
       },
       logout: () => {
         clearDiscoveryMode()
         if (typeof window !== 'undefined') {
           localStorage.removeItem('auth-storage')
         }
-        set({ user: null, token: null, refreshToken: null, isAuthenticated: false, isLoading: false })
-      },
-      updateTokens: (token, refreshToken) => {
-        set({ token, ...(refreshToken ? { refreshToken } : {}) })
+        set({ user: null, isAuthenticated: false, isLoading: false })
       },
       setLoading: (isLoading) => set({ isLoading }),
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ user: state.user, token: state.token, refreshToken: state.refreshToken, isAuthenticated: state.isAuthenticated }),
+      // Ne persister que l'info utilisateur (pas les tokens)
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
       onRehydrateStorage: () => (state) => {
-        // Après la réhydratation, mettre isLoading à false et vérifier isAuthenticated
         if (state) {
           state.isLoading = false
-          state.isAuthenticated = !!(state.token && state.user)
+          // isAuthenticated sera confirmé par /auth/me au prochain chargement
         }
       },
     }

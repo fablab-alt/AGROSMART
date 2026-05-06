@@ -7,6 +7,7 @@ require('./config/loadEnv');
 
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
@@ -61,7 +62,9 @@ const localhostFallbackOrigins = [
   'http://127.0.0.1:3603'
 ];
 
-const allowLocalhostCors = process.env.ALLOW_LOCALHOST_CORS !== 'false';
+const allowLocalhostCors = config.isProd
+  ? process.env.ALLOW_LOCALHOST_CORS === 'true'
+  : process.env.ALLOW_LOCALHOST_CORS !== 'false';
 
 const strictConfiguredOrigins = configuredOrigins.length > 0 ? configuredOrigins : [];
 const prodOrigins = [
@@ -151,6 +154,7 @@ if (process.env.NODE_ENV !== 'test') {
 // =====================================================
 
 app.use(compression());
+app.use(cookieParser());
 
 const { securityMiddleware, bruteForceProtection } = require('./middlewares/security');
 app.use(securityMiddleware());
@@ -229,7 +233,22 @@ const startServer = async () => {
     });
   } catch (error) {
     logger.error('Erreur au démarrage du serveur', { error: error.message });
-    process.exit(1);
+    // En environnement de développement / démonstration local, permettre de démarrer
+    // même si la connexion à la base échoue. Pour forcer l'arrêt en production,
+    // définir FAIL_ON_DB_CONN=true.
+    if (process.env.FAIL_ON_DB_CONN === 'true' || (config.isProd && process.env.ALLOW_DEMO_START !== 'true')) {
+      process.exit(1);
+    }
+    logger.warn('Démarrage sans connexion à la base de données — mode démonstration local');
+    // Ne pas initialiser le worker si la DB est indisponible
+    server.listen(config.server.port, '0.0.0.0', () => {
+      logger.info(`AgroSmart Backend démarré (mode dégradé)`);
+      logger.info(`Port: ${config.server.port}`);
+      logger.info('Bind address: 0.0.0.0');
+      logger.info(`Environnement: ${config.env}`);
+      logger.info(`API Version: ${config.server.apiVersion}`);
+      logger.info(`URL: http://localhost:${config.server.port}`);
+    });
   }
 };
 
