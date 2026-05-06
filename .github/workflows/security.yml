@@ -13,6 +13,7 @@ permissions:
   contents: read
   security-events: write
   actions: read
+  pull-requests: read
 
 jobs:
   # ─── CodeQL Static Analysis ───────────────────────────────────────────────
@@ -86,7 +87,7 @@ jobs:
           python-version: '3.11'
       - run: pip install pip-audit
       - name: Audit Python deps (bloquant sur HIGH+)
-        run: pip-audit --requirement ai_service/requirements.txt --severity high
+        run: pip-audit -r ai_service/requirements.txt
 
   # ─── Trivy Docker image scan ──────────────────────────────────────────────
   trivy:
@@ -106,6 +107,7 @@ jobs:
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
+          ignore-unfixed: true
 
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3

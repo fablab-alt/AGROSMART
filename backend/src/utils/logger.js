@@ -19,7 +19,7 @@ const config = require('../config');
 // Redaction PII
 // ============================
 const PII_KEYS = new Set(['password', 'passwordHash', 'token', 'accessToken', 'refreshToken', 'otp', 'secret', 'creditCard', 'cardNumber']);
-const PII_EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+const PII_EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const PII_PHONE_RE = /(\+?\d[\s\-.]?){8,14}\d/g;
 
 function redactPII(obj, depth = 0) {

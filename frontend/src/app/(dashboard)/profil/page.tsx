@@ -232,9 +232,9 @@ export default function ProfilPage() {
                   <p className="text-gray-500">{user?.telephone}</p>
                   <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
                     <Badge className="bg-green-100 text-green-800">
-                      {user?.role === 'producteur' ? 'Producteur' : 
-                       user?.role === 'partenaire' ? 'Partenaire' : 
-                       user?.role === 'conseiller' ? 'Conseiller' : 'Admin'}
+                      {user?.role === 'PRODUCTEUR' ? 'Producteur' :
+                       user?.role === 'PARTENAIRE' ? 'Partenaire' :
+                       user?.role === 'CONSEILLER' ? 'Conseiller' : 'Admin'}
                     </Badge>
                     <Badge variant="outline">
                       <Calendar className="h-3 w-3 mr-1" />
