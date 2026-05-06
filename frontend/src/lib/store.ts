@@ -10,7 +10,7 @@ export interface User {
   prenoms?: string // Frontend alias for prenom
   telephone: string
   email?: string
-  role: 'producteur' | 'conseiller' | 'admin' | 'partenaire'
+  role: 'PRODUCTEUR' | 'CONSEILLER' | 'ADMIN' | 'PARTENAIRE' | 'AGRONOME' | 'FOURNISSEUR' | 'ACHETEUR'
   status: string
   region_id?: string
   cooperative_id?: string

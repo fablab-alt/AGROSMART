@@ -20,31 +20,32 @@ const { errors } = require('./errorHandler');
 
 /**
  * Énumération des rôles du système
- * 
+ *
  * @enum {string}
  * @readonly
- * @property {string} ADMIN - Administrateur système (accès complet)
- * @property {string} CONSEILLER - Conseiller agricole (gestion producteurs)
- * @property {string} PRODUCTEUR - Producteur agricole (accès ses données)
- * @property {string} PARTENAIRE - Partenaire commercial (marketplace)
  */
 const ROLES = {
   ADMIN: 'ADMIN',
+  AGRONOME: 'AGRONOME',
   CONSEILLER: 'CONSEILLER',
   PRODUCTEUR: 'PRODUCTEUR',
   PARTENAIRE: 'PARTENAIRE',
+  FOURNISSEUR: 'FOURNISSEUR',
   ACHETEUR: 'ACHETEUR'
 };
 
 /**
  * Hiérarchie des rôles (du plus élevé au moins élevé)
+ * ADMIN(5) > AGRONOME(4) = CONSEILLER(4) > PARTENAIRE(3) = FOURNISSEUR(3) > PRODUCTEUR(2) = ACHETEUR(2)
  */
 const ROLE_HIERARCHY = {
-  [ROLES.ADMIN]: 4,
-  [ROLES.CONSEILLER]: 3,
-  [ROLES.PARTENAIRE]: 2,
-  [ROLES.PRODUCTEUR]: 1,
-  [ROLES.ACHETEUR]: 1
+  [ROLES.ADMIN]: 5,
+  [ROLES.AGRONOME]: 4,
+  [ROLES.CONSEILLER]: 4,
+  [ROLES.PARTENAIRE]: 3,
+  [ROLES.FOURNISSEUR]: 3,
+  [ROLES.PRODUCTEUR]: 2,
+  [ROLES.ACHETEUR]: 2
 };
 
 /**
@@ -196,8 +197,8 @@ const requireParcelleAccess = async (req, res, next) => {
       return next(errors.badRequest('ID de parcelle requis'));
     }
 
-    // Admins et conseillers ont accès à toutes les parcelles
-    if ([ROLES.ADMIN, ROLES.CONSEILLER].includes(req.user.role)) {
+    // Admins, agronomes et conseillers ont accès à toutes les parcelles
+    if ([ROLES.ADMIN, ROLES.AGRONOME, ROLES.CONSEILLER].includes(req.user.role)) {
       return next();
     }
 
@@ -273,14 +274,18 @@ const requireCapteurAccess = async (req, res, next) => {
  * Raccourcis pour les rôles courants
  */
 const isAdmin = requireRole(ROLES.ADMIN);
-const isConseiller = requireRole(ROLES.ADMIN, ROLES.CONSEILLER);
-const isProducteur = requireRole(ROLES.ADMIN, ROLES.CONSEILLER, ROLES.PRODUCTEUR);
-const isPartenaire = requireRole(ROLES.ADMIN, ROLES.PARTENAIRE);
+const isAgronome = requireRole(ROLES.ADMIN, ROLES.AGRONOME);
+const isConseiller = requireRole(ROLES.ADMIN, ROLES.AGRONOME, ROLES.CONSEILLER);
+const isProducteur = requireRole(ROLES.ADMIN, ROLES.AGRONOME, ROLES.CONSEILLER, ROLES.PRODUCTEUR);
+const isPartenaire = requireRole(ROLES.ADMIN, ROLES.PARTENAIRE, ROLES.FOURNISSEUR);
+const isFournisseur = requireRole(ROLES.ADMIN, ROLES.FOURNISSEUR);
 const isMarketplaceUser = requireRole(
   ROLES.ADMIN,
+  ROLES.AGRONOME,
   ROLES.CONSEILLER,
   ROLES.PRODUCTEUR,
   ROLES.PARTENAIRE,
+  ROLES.FOURNISSEUR,
   ROLES.ACHETEUR
 );
 
@@ -293,8 +298,10 @@ module.exports = {
   requireParcelleAccess,
   requireCapteurAccess,
   isAdmin,
+  isAgronome,
   isConseiller,
   isProducteur,
   isPartenaire,
+  isFournisseur,
   isMarketplaceUser
 };

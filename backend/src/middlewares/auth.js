@@ -219,18 +219,7 @@ const verifyRefreshToken = async (req, res, next) => {
         prenoms: true,
         role: true,
         status: true,
-        // langue_preferee matches schema ? Schema doesn't show langue_preferee in view_file 332 (lines 150-250 are User model)
-        // Let's check schema for User model again or safe select.
-        // Step 332 shows User model. It has NO `langue_preferee` field?
-        // Wait, Step 332 lines 150-186 shows:
-        // nom, prenoms, email, telephone, passwordHash, role, status, regionId, photoProfil, dateNaissance, adresse, whatsappVerifie, emailVerifie, derniereConnexion, createdAt, updatedAt.
-        // NO langue_preferee!
-        // But authController line 173 used `user.langue_preferee`.
-        // And authService line 22 uses `langue_preferee = 'fr'`.
-        // Maybe it's missing in my view or missing in schema?
-        // Users table usually has it.
-        // Let's look at schema content again.
-        // I will omit selecting it specifically or select all relevant fields that exist.
+        langue_preferee: true,
       }
     });
 

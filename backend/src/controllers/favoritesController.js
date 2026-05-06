@@ -1,7 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../config/prisma');
 const logger = require('../utils/logger');
-
-const prisma = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL });
 
 /**
  * @desc    Get user's favorites

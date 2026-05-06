@@ -37,30 +37,22 @@ const processMeasure = async (job) => {
 
             const results = [];
 
+            // Mapping des clés MQTT vers les valeurs d'enum CapteurType (Prisma)
+            // Un capteur HUMIDITE_TEMPERATURE_AMBIANTE (ex: DHT22) mesure à la fois
+            // l'humidité ambiante ET la température — les deux clés pointent vers ce type.
+            // HUMIDITE_SOL est un capteur séparé (sonde de sol).
+            const MQTT_TYPE_MAP = {
+                humidity: 'HUMIDITE_TEMPERATURE_AMBIANTE',
+                temperature: 'HUMIDITE_TEMPERATURE_AMBIANTE',
+                soil_moisture: 'HUMIDITE_SOL',
+                npk: 'NPK',
+                uv: 'UV',
+                wind_direction: 'DIRECTION_VENT',
+                transpiration: 'TRANSPIRATION_PLANTE',
+            };
+
             for (const [type, val] of Object.entries(values)) {
-                // Map types (iot keys -> db enum types)
-                let dbType = type;
-                if (type === 'humidity') dbType = 'humidite_temperature_ambiante'; // Check enum values exactly?
-                if (type === 'soil_moisture') dbType = 'humidite_sol';
-                if (type === 'temperature') dbType = 'humidite_temperature_ambiante'; // Warning: duplicate mapping? 
-                // Legacy code mapped both to same? Or separate?
-                // Legacy: if (type === 'temperature') dbType = 'humidite_temperature_ambiante';
-                // Wait, surely temperature is TEMPERATURE?
-                // Step 585 line 45: `if (type === 'temperature') dbType = 'humidite_temperature_ambiante';` -> confirmed legacy behavior.
-                if (type === 'npk') dbType = 'npk';
-
-                // Find sensor by station and type
-                // Note: CapteurType enum might be uppercase? 'HUMIDITE_SOL'.
-                // Legacy DB used lowercase strings?
-                // Prisma requires matching Enum value if `type` is Enum.
-                // I should probably uppercase them if Enum.
-                // Let's try to find capteur first.
-                // In legacy: `WHERE station_id = $1 AND type = $2`
-                // Type in legacy might be text. In Prisma it is CapteurType Enum.
-                // I'll try to findFirst.
-
-                // Mapping DB types to Enum (usually Uppercase in Prisma)
-                const enumType = dbType.toUpperCase();
+                const enumType = MQTT_TYPE_MAP[type] || type.toUpperCase();
 
                 const sensor = await prisma.capteur.findFirst({
                     where: {
@@ -113,8 +105,6 @@ const processMeasure = async (job) => {
         }
 
         if (capteur.statut !== 'ACTIF' && capteur.statut !== 'MAINTENANCE') {
-            // Enum uses uppercase usually? Legacy used 'actif'.
-            // I will assume Enum is Uppercase ACTIF.
             logger.warn(`Mesure ignorée pour capteur inactif`, { capteur_id, status: capteur.statut });
             return { status: 'ignored', reason: 'sensor_inactive' };
         }
