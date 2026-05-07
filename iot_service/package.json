@@ -1,0 +1,17 @@
+{
+    "name": "agrosmart-iot-service",
+    "version": "1.0.0",
+    "description": "Service d'ingestion IoT pour AgroSmart",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js",
+        "dev": "nodemon index.js"
+    },
+    "dependencies": {
+        "dotenv": "^17.2.4",
+        "mqtt": "^5.14.1"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.11"
+    }
+}

@@ -1,0 +1,138 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend-runtime
+    container_name: agrosmart-backend
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: ${BACKEND_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSL: ${DB_SSL}
+      DB_POOL_SIZE: ${DB_POOL_SIZE}
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT}
+      DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      ALLOW_LOCALHOST_CORS: ${ALLOW_LOCALHOST_CORS}
+      LOG_LEVEL: ${LOG_LEVEL}
+      LOG_DIR: ${LOG_DIR}
+      LOG_FILE: ${LOG_FILE}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS}
+      APP_VERSION: ${APP_VERSION}
+      WEATHER_API_URL: ${WEATHER_API_URL}
+      WEATHER_API_KEY: ${WEATHER_API_KEY}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
+      AI_SERVICE_URL: ${AI_SERVICE_URL}
+      IOT_SERVICE_URL: ${IOT_SERVICE_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}
+      TWILIO_WHATSAPP_NUMBER: ${TWILIO_WHATSAPP_NUMBER}
+      IOT_GATEWAY_SECRET: ${IOT_GATEWAY_SECRET}
+      LORA_NETWORK_KEY: ${LORA_NETWORK_KEY}
+      TZ: ${TZ}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    expose:
+      - "${BACKEND_PORT}"
+    volumes:
+      - backend_uploads:/app/backend/uploads
+      - backend_logs:/app/backend/logs
+    restart: unless-stopped
+    networks:
+      - app-network
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
+      - "traefik.http.routers.agrosmart-backend.rule=Host(`${API_DOMAIN}`)"
+      - "traefik.http.routers.agrosmart-backend.entrypoints=websecure"
+      - "traefik.http.routers.agrosmart-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agrosmart-backend.loadbalancer.server.port=${BACKEND_PORT}"
+
+  # backend-worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: backend-worker-runtime
+  #   container_name: agrosmart-backend-worker
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     <<: *backend-env
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   restart: unless-stopped
+  #   profiles:
+  #     - worker
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - app-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend-runtime
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
+    container_name: agrosmart-frontend
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: ${FRONTEND_PORT}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      TZ: ${TZ}
+    ports:
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+    expose:
+      - "${FRONTEND_PORT}"
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
+      - "traefik.http.routers.agrosmart-frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.agrosmart-frontend.entrypoints=websecure"
+      - "traefik.http.routers.agrosmart-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agrosmart-frontend.loadbalancer.server.port=${FRONTEND_PORT}"
+
+volumes:
+  backend_uploads:
+  backend_logs:
+
+networks:
+  app-network:
+    driver: bridge
+  traefik-network:
+    external: true

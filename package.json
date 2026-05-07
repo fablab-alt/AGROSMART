@@ -1,0 +1,54 @@
+{
+  "name": "agrosmart",
+  "version": "1.0.0",
+  "description": "AgroSmart - Système Agricole Intelligent (Monorepo)",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "---  DEVELOPMENT  ---": "",
+    "dev": "node scripts/dev.js",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:iot": "cd iot_service && node index.js",
+    "dev:ai": "cd ai_service && python3 app.py",
+    "dev:studio": "cd backend && npx prisma studio",
+
+    "---  PRODUCTION  ---": "",
+    "start": "pm2 start ecosystem.config.js",
+    "stop": "pm2 stop ecosystem.config.js",
+    "restart": "pm2 restart ecosystem.config.js",
+    "status": "pm2 status",
+    "logs": "pm2 logs",
+
+    "---  DATABASE  ---": "",
+    "db:migrate": "cd backend && npx prisma migrate deploy",
+    "db:migrate:dev": "cd backend && npx prisma migrate dev",
+    "db:push": "cd backend && npx prisma db push",
+    "db:seed": "cd backend && node scripts/seed.js",
+    "db:studio": "cd backend && npx prisma studio",
+    "db:reset": "cd backend && npx prisma migrate reset --force",
+
+    "---  INSTALL  ---": "",
+    "install:all": "node scripts/install-all.js",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "install:iot": "cd iot_service && npm install",
+    "install:ai": "cd ai_service && pip install -r requirements.txt",
+
+    "---  BUILD  ---": "",
+    "build": "cd frontend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+
+    "---  TEST & QUALITY  ---": "",
+    "test": "cd backend && npm test",
+    "lint": "cd backend && npm run lint",
+    "lint:fix": "cd backend && npm run lint:fix",
+
+    "---  HEALTH  ---": "",
+    "health": "node scripts/health-check.js"
+  },
+  "keywords": ["agriculture", "smart-farming", "iot", "ai"],
+  "license": "MIT"
+}

@@ -1,0 +1,46 @@
+{
+  "@@locale": "ff",
+  
+  "appTitle": "AgroSmart",
+  "welcome": "Jam weli",
+  "dashboard": "Nokkuure",
+  "parcelles": "Leydi",
+  "sensors": "Kaawtooje",
+  "alerts": "Tinndinooji",
+  "marketplace": "Suudu jawreede",
+  "profile": "Janngoore",
+  "settings": "Golle",
+  "logout": "Yaltu",
+  
+  "weather": "Naange",
+  "weatherForecast": "Humpito naange",
+  "temperature": "Puccu",
+  "humidity": "Ndiyam",
+  "rainfall": "Diimaagu",
+  "wind": "Hendu",
+  
+  "training": "Jannde",
+  "library": "Galle",
+  "myProgress": "Golle am",
+  
+  "chat": "Haala",
+  "community": "Gure",
+  "forum": "Nokku haala",
+  
+  "points": "Dolle",
+  "badges": "Janngooje",
+  "level": "Daraja",
+  
+  "cancel": "Haaytu",
+  "save": "Mooftir",
+  "delete": "Momtu",
+  "edit": "Waylu",
+  "add": "Ɓeyd",
+  "search": "Yiytu",
+  "loading": "Nana fuɗɗoo...",
+  "error": "Juumre",
+  "success": "Golle heɓti",
+  
+  "noDataAvailable": "Alaa jaabawol",
+  "tryAgain": "Fuɗɗito gooto"
+}

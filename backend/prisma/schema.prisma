@@ -1,0 +1,1502 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+  // Connection pool settings via URL params:
+  // - connection_limit: Maximum connections in pool (default: 5)
+  // - pool_timeout: Wait time for connection from pool (default: 10s)
+  // - connect_timeout: Time to establish connection (default: 5s)
+  // Example: DATABASE_URL="mysql://user:pass@host:3306/db?connection_limit=10&pool_timeout=20&connect_timeout=10"
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  ADMIN
+  AGRONOME
+  PRODUCTEUR
+  ACHETEUR
+  FOURNISSEUR
+  CONSEILLER
+  PARTENAIRE
+}
+
+enum UserStatus {
+  ACTIF
+  INACTIF
+  SUSPENDU
+  EN_ATTENTE
+}
+
+enum OtpType {
+  LOGIN
+  REGISTER
+  RESET
+}
+
+enum ParcelleStatus {
+  ACTIVE
+  EN_REPOS
+  PREPAREE
+  ENSEMENCEE
+  EN_CROISSANCE
+  RECOLTE
+}
+
+enum ParcelleHealth {
+  OPTIMAL
+  SURVEILLANCE
+  CRITIQUE
+}
+
+enum StationStatus {
+  ACTIVE
+  MAINTENANCE
+  HORS_SERVICE
+}
+
+enum CapteurType {
+  HUMIDITE_TEMPERATURE_AMBIANTE
+  HUMIDITE_SOL
+  UV
+  NPK
+  DIRECTION_VENT
+  TRANSPIRATION_PLANTE
+}
+
+enum CapteurStatus {
+  ACTIF
+  INACTIF
+  MAINTENANCE
+  DEFAILLANT
+}
+
+enum AlertLevel {
+  INFO
+  IMPORTANT
+  CRITIQUE
+}
+
+enum AlertStatus {
+  NOUVELLE
+  LUE
+  TRAITEE
+  IGNOREE
+}
+
+enum CropCategory {
+  CEREALES
+  LEGUMINEUSES
+  TUBERCULES
+  LEGUMES
+  FRUITS
+  OLEAGINEUX
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum StockCategory {
+  SEMENCES
+  ENGRAIS
+  PESTICIDES
+  HERBICIDES
+  OUTILS
+  RECOLTES
+  AUTRES
+}
+
+enum TypeMouvement {
+  ENTREE
+  SORTIE
+  AJUSTEMENT
+  PERTE
+}
+
+enum TypeAlerte {
+  STOCK_BAS
+  EXPIRATION_PROCHE
+  STOCK_EPUISE
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model Region {
+  id            String   @id @default(uuid())
+  nom           String   @unique @db.VarChar(100)
+  code          String   @unique @db.VarChar(10)
+  chefLieu      String?  @map("chef_lieu") @db.VarChar(100)
+  superficieKm2 Decimal? @map("superficie_km2") @db.Decimal(10, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  users        User[]
+  parcelles    Parcelle[]
+  cooperatives Cooperative[]
+
+  @@map("regions")
+}
+
+model Cooperative {
+  id            String    @id @default(uuid())
+  nom           String    @db.VarChar(200)
+  code          String    @unique @db.VarChar(20)
+  regionId      String?   @map("region_id")
+  adresse       String?   @db.Text
+  telephone     String?   @db.VarChar(20)
+  email         String?   @db.VarChar(100)
+  nombreMembres Int       @default(0) @map("nombre_membres")
+  dateCreation  DateTime? @map("date_creation") @db.Date
+  estActive     Boolean   @default(true) @map("est_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  region Region? @relation(fields: [regionId], references: [id])
+
+  @@index([regionId])
+  @@map("cooperatives")
+}
+
+model User {
+  id                      String     @id @default(uuid())
+  nom                     String     @db.VarChar(100)
+  prenoms                 String     @db.VarChar(150)
+  email                   String?    @unique @db.VarChar(150)
+  telephone               String     @unique @db.VarChar(20)
+  passwordHash            String     @map("password_hash") @db.VarChar(255)
+  role                    UserRole   @default(PRODUCTEUR)
+  status                  UserStatus @default(EN_ATTENTE) @map("statut")
+  regionId                String?    @map("region_id")
+  photoProfil             String?    @map("photo_profil") @db.Text
+  dateNaissance           DateTime?  @map("date_naissance") @db.Date
+  adresse                 String?    @db.Text
+  preferencesNotification Json?      @map("preferences_notification")
+  whatsappVerifie         Boolean    @default(false) @map("whatsapp_verifie")
+  emailVerifie            Boolean    @default(false) @map("email_verifie")
+  derniereConnexion       DateTime?  @map("derniere_connexion")
+  langue_preferee         String     @default("fr") @map("langue_preferee") @db.VarChar(10)
+
+  // Gamification
+  points Int     @default(0)
+  niveau String  @default("Novice") @db.VarChar(50)
+  badge  String? @db.VarChar(100)
+
+  // Soft delete
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.VarChar(100)
+
+  // Champs profil agricole (Déclaratif à l'inscription)
+  production3MoisPrecedentsKg Decimal? @map("production_3_mois_precedents_kg") @db.Decimal(10, 2)
+  productionMois1Kg           Decimal? @map("production_mois1_kg") @db.Decimal(10, 2)
+  productionMois2Kg           Decimal? @map("production_mois2_kg") @db.Decimal(10, 2)
+  productionMois3Kg           Decimal? @map("production_mois3_kg") @db.Decimal(10, 2)
+  typeProducteur              String?  @map("type_producteur") @db.VarChar(100)
+  superficieExploitee         Decimal? @map("superficie_exploitee") @db.Decimal(10, 2)
+  uniteSuperficie             String?  @map("unite_superficie") @db.VarChar(10)
+  systemeIrrigation           String?  @map("systeme_irrigation") @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  region                  Region?                    @relation(fields: [regionId], references: [id])
+  parcelles               Parcelle[]
+  diagnostics             Diagnostic[]
+  forumPosts              ForumPost[]
+  forumReponses           ForumReponse[]
+  messagesSent            Message[]                  @relation("MessagesSent")
+  messagesReceived        Message[]                  @relation("MessagesReceived")
+  progressions            ProgressionFormation[]
+  produits                MarketplaceProduit[]
+  commandes               MarketplaceCommande[]
+  badges                  UserBadge[]
+  realisations            UserRealisation[]
+  activitiesLog           ActivitiesLog[]
+  refreshTokens           RefreshToken[]
+  recommandations         Recommandation[]
+  detections              DetectionMaladie[]
+  equipementsProprietaire EquipementLocation[]
+  locations               Location[]
+  participationsAchats    ParticipationAchatGroupe[]
+  transactionsPaiement    TransactionPaiement[]
+  economies               Economies[]
+  performanceParcelles    PerformanceParcelle[]
+  // Relations ajoutées pour intégrité référentielle
+  otpCodes                OtpCode[]
+  alertes                 Alerte[]
+  notifications           Notification[]
+  roiTracking             RoiTracking[]
+  locationsMateriel       LocationMateriel[]         @relation("LocationsMateriel")
+  auditLogs               AuditLog[]                 @relation("AuditLogs")
+  passwordHistory         PasswordHistory[]          @relation("PasswordHistory")
+  // Relations pour fonctionnalités Acheteur
+  cart                    Cart?
+  favorites               Favorite[]
+  stocks                  Stock[]
+  calendrierActivites     CalendrierActivite[]
+  wishlist                Wishlist?
+  avis                    Avis[]
+  userPoints              UserPoint?
+
+  @@index([email])
+  @@index([telephone])
+  @@index([regionId])
+  @@index([role, status])
+  @@index([isActive])
+  @@map("users")
+}
+
+model PasswordHistory {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relation avec User pour intégrité référentielle
+  user User @relation("PasswordHistory", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_history")
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  code      String   @db.VarChar(10)
+  type      OtpType
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relation avec User pour intégrité référentielle
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, used])
+  @@map("otp_codes")
+}
+
+model Parcelle {
+  id              String         @id @default(uuid())
+  userId          String         @map("user_id")
+  nom             String         @db.VarChar(200)
+  superficie      Decimal        @db.Decimal(10, 2)
+  typeSol         String?        @map("type_sol") @db.VarChar(50)
+  latitude        Decimal?       @db.Decimal(10, 8)
+  longitude       Decimal?       @db.Decimal(11, 8)
+  regionId        String?        @map("region_id")
+  cultureActuelle String?        @map("culture_actuelle") @db.VarChar(100)
+  datePlantation  DateTime?      @map("date_plantation") @db.Date
+  statut          ParcelleStatus @default(ACTIVE)
+  sante           ParcelleHealth @default(OPTIMAL)
+
+  // Soft delete
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  region              Region?               @relation(fields: [regionId], references: [id])
+  stations            Station[]
+  capteurs            Capteur[]
+  diagnostics         Diagnostic[]
+  rendements          RendementParCulture[]
+  roiTracking         RoiTracking[]
+  performances        PerformanceParcelle[]
+  recommandations     Recommandation[]
+  plantations         Plantation[]
+  detections          DetectionMaladie[]
+  stocks              Stock[]
+  calendrierActivites CalendrierActivite[]
+
+  @@index([userId])
+  @@index([regionId])
+  @@map("parcelles")
+}
+
+model Station {
+  id                String        @id @default(uuid())
+  parcelleId        String        @map("parcelle_id")
+  nom               String        @db.VarChar(200)
+  code              String?       @unique @db.VarChar(100) // Added for sensor worker
+  modele            String?       @db.VarChar(100)
+  numeroSerie       String?       @unique @map("numero_serie") @db.VarChar(100)
+  statut            StationStatus @default(ACTIVE)
+  batterie          Int?
+  signal            Int?
+  latitude          Decimal?      @db.Decimal(10, 8)
+  longitude         Decimal?      @db.Decimal(11, 8)
+  derniereConnexion DateTime?     @map("derniere_connexion")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  parcelle Parcelle  @relation(fields: [parcelleId], references: [id], onDelete: Cascade)
+  capteurs Capteur[]
+
+  @@index([parcelleId])
+  @@map("stations")
+}
+
+model Capteur {
+  id         String        @id @default(uuid())
+  stationId  String?       @map("station_id")
+  parcelleId String        @map("parcelle_id")
+  nom        String        @db.VarChar(200)
+  type       CapteurType
+  unite      String        @db.VarChar(20)
+  seuilMin   Decimal       @map("seuil_min") @db.Decimal(10, 2)
+  seuilMax   Decimal       @map("seuil_max") @db.Decimal(10, 2)
+  statut     CapteurStatus @default(ACTIF)
+  signal     Int?
+  batterie   Int?
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  station  Station? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+  parcelle Parcelle @relation(fields: [parcelleId], references: [id], onDelete: Cascade)
+  mesures  Mesure[]
+  alertes  Alerte[]
+
+  @@index([stationId])
+  @@index([parcelleId])
+  @@index([type])
+  @@map("capteurs")
+}
+
+model Mesure {
+  id        String   @id @default(uuid())
+  capteurId String   @map("capteur_id")
+  valeur    Decimal  @db.Decimal(15, 4)
+  unite     String   @db.VarChar(20)
+  timestamp DateTime @default(now())
+
+  capteur Capteur @relation(fields: [capteurId], references: [id], onDelete: Cascade)
+
+  @@index([capteurId, timestamp])
+  @@index([timestamp]) // Index pour les requêtes par plage de dates
+  @@map("mesures")
+}
+
+model Alerte {
+  id        String      @id @default(uuid())
+  userId    String      @map("user_id")
+  capteurId String?     @map("capteur_id")
+  type      String      @db.VarChar(50)
+  niveau    AlertLevel
+  titre     String      @db.VarChar(255)
+  message   String      @db.Text
+  statut    AlertStatus @default(NOUVELLE)
+  donnees   Json?
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  // Relations pour intégrité référentielle
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  capteur Capteur? @relation(fields: [capteurId], references: [id], onDelete: SetNull)
+
+  @@index([userId, statut])
+  @@index([capteurId])
+  @@index([createdAt]) // Index pour tri chronologique des alertes
+  @@index([niveau, createdAt]) // Index pour filtrage par niveau + tri
+  @@map("alertes")
+}
+
+model Diagnostic {
+  id                   String   @id @default(uuid())
+  userId               String   @map("user_id")
+  parcelleId           String?  @map("parcelle_id")
+  type                 String   @default("disease") @db.VarChar(50)
+  diseaseName          String?  @map("disease_name") @db.VarChar(255)
+  cropType             String?  @map("crop_type") @db.VarChar(100)
+  confidenceScore      Decimal? @map("confidence_score") @db.Decimal(5, 2)
+  severity             String?  @db.VarChar(50)
+  imageUrl             String?  @map("image_url") @db.Text
+  recommendations      String?  @db.Text
+  treatmentSuggestions String?  @map("treatment_suggestions") @db.Text
+  resultat             Json?
+  parametres           Json?
+  modeleUtilise        String?  @map("modele_utilise") @db.VarChar(100)
+  scoreConfiance       Decimal? @map("score_confiance") @db.Decimal(5, 2)
+  localisation         String?  @db.VarChar(100) // "lat,lon"
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parcelle Parcelle? @relation(fields: [parcelleId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([parcelleId])
+  @@index([userId, createdAt])
+  @@index([type])
+  @@map("diagnostics")
+}
+
+model Formation {
+  id           String   @id @default(uuid())
+  titre        String   @db.VarChar(255)
+  description  String   @db.Text
+  categorie    String   @db.VarChar(100)
+  niveau       String   @db.VarChar(50)
+  dureeMinutes Int      @map("duree_minutes")
+  imageUrl     String?  @map("image_url") @db.Text
+  active       Boolean  @default(true)
+  vues         Int      @default(0)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  modules      ModuleFormation[]
+  progressions ProgressionFormation[]
+
+  @@map("formations")
+}
+
+model ModuleFormation {
+  id           String   @id @default(uuid())
+  formationId  String   @map("formation_id")
+  titre        String   @db.VarChar(255)
+  contenu      String   @db.Text
+  ordre        Int
+  videoUrl     String?  @map("video_url") @db.Text
+  documentsUrl String?  @map("documents_url") @db.Text
+  quizData     Json?    @map("quiz_data")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  formation Formation @relation(fields: [formationId], references: [id], onDelete: Cascade)
+
+  @@index([formationId])
+  @@map("modules_formation")
+}
+
+model ProgressionFormation {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  formationId     String    @map("formation_id")
+  progression     Int       @default(0)
+  complete        Boolean   @default(false)
+  modulesTermines Json?     @map("modules_termines")
+  score           Int?
+  certificatUrl   String?   @map("certificat_url") @db.Text
+  dateDebut       DateTime  @default(now()) @map("date_debut")
+  dateFin         DateTime? @map("date_fin")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  formation Formation @relation(fields: [formationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, formationId]) // Un utilisateur ne peut avoir qu'une progression par formation
+  @@index([userId])
+  @@index([formationId])
+  @@map("progressions_formation")
+}
+
+model MarketplaceProduit {
+  id               String   @id @default(uuid())
+  vendeurId        String   @map("vendeur_id")
+  nom              String   @db.VarChar(255)
+  description      String   @db.Text
+  categorie        String   @db.VarChar(100)
+  prix             Decimal  @db.Decimal(12, 2)
+  unite            String   @db.VarChar(50)
+  stock            Int      @default(0)
+  images           Json?
+  specifications   Json?    @map("specifications")
+  typeOffre        String   @default("vente") @map("type_offre") @db.VarChar(20)
+  prixLocationJour Decimal? @map("prix_location_jour") @db.Decimal(12, 2)
+  dureeMinLocation Int?     @map("duree_min_location")
+  caution          Decimal? @db.Decimal(12, 2)
+  etat             String?  @default("bon") @db.VarChar(50)
+  actif            Boolean  @default(true)
+
+  // Soft delete
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  vendeur       User                  @relation(fields: [vendeurId], references: [id], onDelete: Cascade)
+  commandes     MarketplaceCommande[]
+  cartItems     CartItem[]
+  favorites     Favorite[]
+  wishlistItems WishlistItem[]
+  avis          Avis[]
+
+  @@index([vendeurId])
+  @@index([categorie])
+  @@index([actif, prix]) // D-IDX-06: Index pour recherche produits actifs triés par prix
+  @@map("marketplace_produits")
+}
+
+// ============================================
+// CART & FAVORITES (Marketplace-First)
+// ============================================
+
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String   @map("cart_id")
+  produitId String   @map("produit_id")
+  quantite  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cart    Cart               @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  produit MarketplaceProduit @relation(fields: [produitId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, produitId])
+  @@index([cartId])
+  @@index([produitId])
+  @@map("cart_items")
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  produitId String   @map("produit_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  produit MarketplaceProduit @relation(fields: [produitId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, produitId])
+  @@index([userId])
+  @@index([produitId])
+  @@map("favorites")
+}
+
+// ============================================
+// WISHLIST (Liste de souhaits)
+// ============================================
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items WishlistItem[]
+
+  @@map("wishlists")
+}
+
+model WishlistItem {
+  id         String   @id @default(uuid())
+  wishlistId String   @map("wishlist_id")
+  produitId  String   @map("produit_id")
+  addedAt    DateTime @default(now()) @map("added_at")
+
+  wishlist Wishlist           @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  produit  MarketplaceProduit @relation(fields: [produitId], references: [id], onDelete: Cascade)
+
+  @@unique([wishlistId, produitId])
+  @@index([wishlistId])
+  @@index([produitId])
+  @@map("wishlist_items")
+}
+
+// ============================================
+// AVIS & EVALUATIONS
+// ============================================
+
+model Avis {
+  id            String   @id @default(uuid())
+  produitId     String   @map("produit_id")
+  utilisateurId String   @map("utilisateur_id")
+  note          Int // Note de 1 à 5
+  commentaire   String?  @db.Text
+  images        String?  @db.Text // JSON array of image URLs
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  produit     MarketplaceProduit @relation(fields: [produitId], references: [id], onDelete: Cascade)
+  utilisateur User               @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+
+  @@unique([produitId, utilisateurId]) // Un utilisateur ne peut donner qu'un seul avis par produit
+  @@index([produitId])
+  @@index([utilisateurId])
+  @@index([note])
+  @@map("avis")
+}
+
+model MarketplaceCommande {
+  id               String      @id @default(uuid())
+  acheteurId       String      @map("acheteur_id")
+  vendeurId        String?     @map("vendeur_id")
+  produitId        String      @map("produit_id")
+  quantite         Int
+  prixUnitaire     Decimal     @map("prix_unitaire") @db.Decimal(12, 2)
+  prixTotal        Decimal     @map("prix_total") @db.Decimal(12, 2)
+  statut           OrderStatus @default(PENDING)
+  dateDebut        DateTime?   @map("date_debut")
+  dateFin          DateTime?   @map("date_fin")
+  statutLocation   String?     @map("statut_location") @db.VarChar(50)
+  cautionVersee    Decimal?    @map("caution_versee") @db.Decimal(12, 2)
+  statutCaution    String?     @map("statut_caution") @db.VarChar(50)
+  adresseLivraison String?     @map("adresse_livraison") @db.Text
+  modeLivraison    String?     @map("mode_livraison") @db.VarChar(50)
+  notes            String?     @db.Text
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  acheteur     User                     @relation(fields: [acheteurId], references: [id], onDelete: Cascade)
+  produit      MarketplaceProduit       @relation(fields: [produitId], references: [id])
+  transactions MarketplaceTransaction[]
+
+  @@index([acheteurId])
+  @@index([produitId])
+  @@index([statut]) // D-IDX-07: Index pour filtrage par statut
+  @@index([vendeurId, statut]) // Index pour requêtes vendeur analytics
+  @@index([acheteurId, statut])
+  @@index([createdAt])
+  @@map("marketplace_commandes")
+}
+
+model MarketplaceTransaction {
+  id                   String            @id @default(uuid())
+  commandeId           String            @map("commande_id")
+  montant              Decimal           @db.Decimal(12, 2)
+  methodePaiement      String?           @map("methode_paiement") @db.VarChar(50)
+  statut               TransactionStatus @default(PENDING)
+  referenceTransaction String?           @unique @map("reference_transaction") @db.VarChar(100)
+  createdAt            DateTime          @default(now()) @map("created_at")
+
+  commande MarketplaceCommande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+
+  @@index([commandeId])
+  @@index([statut])
+  @@map("marketplace_transactions")
+}
+
+model ForumPost {
+  id        String  @id @default(uuid())
+  auteurId  String  @map("auteur_id")
+  titre     String  @db.VarChar(255)
+  contenu   String  @db.Text
+  categorie String  @db.VarChar(100)
+  vues      Int     @default(0)
+  resolu    Boolean @default(false)
+
+  // Soft delete
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  auteur   User           @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+  reponses ForumReponse[]
+
+  @@index([auteurId])
+  @@index([categorie])
+  @@index([resolu, createdAt]) // Index pour questions non résolues récentes
+  @@index([createdAt]) // Index pour tri chronologique
+  @@map("forum_posts")
+}
+
+model ForumReponse {
+  id          String   @id @default(uuid())
+  postId      String   @map("post_id")
+  auteurId    String   @map("auteur_id")
+  contenu     String   @db.Text
+  estSolution Boolean  @default(false) @map("est_solution")
+  upvotes     Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  post   ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  auteur User      @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([auteurId])
+  @@map("forum_reponses")
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String?  @map("conversation_id")
+  expediteurId   String   @map("expediteur_id")
+  destinataireId String   @map("destinataire_id")
+  sujet          String?  @db.VarChar(255)
+  contenu        String   @db.Text
+  lu             Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  expediteur   User          @relation("MessagesSent", fields: [expediteurId], references: [id], onDelete: Cascade)
+  destinataire User          @relation("MessagesReceived", fields: [destinataireId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([expediteurId])
+  @@index([destinataireId, lu])
+  @@map("messages")
+}
+
+model Culture {
+  id               String       @id @default(uuid())
+  nom              String       @unique @db.VarChar(100)
+  nomScientifique  String?      @map("nom_scientifique") @db.VarChar(150)
+  categorie        CropCategory
+  saisonCulture    String?      @map("saison_culture") @db.VarChar(100)
+  dureeJours       Int?         @map("duree_jours")
+  phOptimal        Decimal?     @map("ph_optimal") @db.Decimal(3, 1)
+  temperatureMin   Decimal?     @map("temperature_min") @db.Decimal(4, 1)
+  temperatureMax   Decimal?     @map("temperature_max") @db.Decimal(4, 1)
+  imageUrl         String?      @map("image_url") @db.Text
+  rendementMoyen   Decimal?     @default(0) @map("rendement_moyen") @db.Decimal(10, 2)
+  rendementOptimal Decimal?     @default(0) @map("rendement_optimal") @db.Decimal(10, 2)
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  rendements  RendementParCulture[]
+  plantations Plantation[]
+  detections  DetectionMaladie[]
+
+  @@map("cultures")
+}
+
+model RendementParCulture {
+  id            String   @id @default(uuid())
+  parcelleId    String   @map("parcelle_id")
+  cultureId     String   @map("culture_id")
+  annee         Int
+  rendementKgHa Decimal  @map("rendement_kg_ha") @db.Decimal(10, 2)
+  qualite       String?  @db.VarChar(50)
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  parcelle Parcelle @relation(fields: [parcelleId], references: [id], onDelete: Cascade)
+  culture  Culture  @relation(fields: [cultureId], references: [id])
+
+  @@unique([parcelleId, cultureId, annee]) // Un seul rendement par parcelle/culture/année
+  @@index([parcelleId])
+  @@index([cultureId])
+  @@index([annee])
+  @@map("rendements_par_culture")
+}
+
+model RoiTracking {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  parcelleId        String?  @map("parcelle_id")
+  periodeDebut      DateTime @map("periode_debut") @db.Date
+  periodeFin        DateTime @map("periode_fin") @db.Date
+  coutSemences      Decimal? @map("cout_semences") @db.Decimal(10, 2)
+  coutEngrais       Decimal? @map("cout_engrais") @db.Decimal(10, 2)
+  coutPesticides    Decimal? @map("cout_pesticides") @db.Decimal(10, 2)
+  coutIrrigation    Decimal? @map("cout_irrigation") @db.Decimal(10, 2)
+  coutMainOeuvre    Decimal? @map("cout_main_oeuvre") @db.Decimal(10, 2)
+  autresCouts       Decimal? @map("autres_couts") @db.Decimal(10, 2)
+  quantiteRecoltee  Decimal? @map("quantite_recoltee") @db.Decimal(10, 2)
+  prixVenteUnitaire Decimal? @map("prix_vente_unitaire") @db.Decimal(12, 2)
+  roiTrend          String?  @map("roi_trend") @db.VarChar(20)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations pour intégrité référentielle
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parcelle Parcelle? @relation(fields: [parcelleId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([parcelleId])
+  @@map("roi_tracking")
+}
+
+model ActivitiesLog {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  action      String   @db.VarChar(100)
+  description String?  @db.Text
+  metadata    Json?
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([action])
+  @@index([createdAt])
+  @@map("activities_log")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tableName String   @map("table_name") @db.VarChar(100)
+  recordId  String   @map("record_id")
+  action    String   @db.VarChar(20)
+  oldData   Json?    @map("old_data")
+  newData   Json?    @map("new_data")
+  userId    String?  @map("user_id")
+  timestamp DateTime @default(now())
+
+  // Relation avec User pour intégrité référentielle (SET NULL si user supprimé)
+  user User? @relation("AuditLogs", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tableName, recordId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  titre     String   @db.VarChar(255)
+  message   String   @db.Text
+  type      String   @db.VarChar(50)
+  lue       Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relation avec User pour intégrité référentielle
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lue])
+  @@map("notifications")
+}
+
+model LocationMateriel {
+  id             String   @id @default(uuid())
+  locataireId    String   @map("locataire_id")
+  materiel       String   @db.VarChar(255)
+  dateDebut      DateTime @map("date_debut") @db.Date
+  dateFin        DateTime @map("date_fin") @db.Date
+  coutJournalier Decimal  @map("cout_journalier") @db.Decimal(10, 2)
+  montantTotal   Decimal  @map("montant_total") @db.Decimal(12, 2)
+  statut         String   @db.VarChar(50)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relation ajoutée pour intégrité référentielle
+  locataire User @relation("LocationsMateriel", fields: [locataireId], references: [id], onDelete: Cascade)
+
+  @@index([locataireId])
+  @@index([dateDebut, dateFin]) // Index pour recherche par période
+  @@map("location_materiel")
+}
+
+model Badge {
+  id          String    @id @default(uuid())
+  nom         String    @unique @db.VarChar(100)
+  description String    @db.Text
+  icone       String?   @db.VarChar(255)
+  condition   Json
+  points      Int       @default(0)
+  isActive    Boolean   @default(true) @map("is_active") // Soft delete
+  deletedAt   DateTime? @map("deleted_at") // Soft delete timestamp
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  userBadges UserBadge[]
+
+  @@index([isActive]) // For filtering active badges
+  @@map("badges")
+}
+
+model UserBadge {
+  id       String   @id @default(uuid())
+  userId   String   @map("user_id")
+  badgeId  String   @map("badge_id")
+  obtenuLe DateTime @default(now()) @map("obtenu_le")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id])
+
+  @@unique([userId, badgeId]) // Un utilisateur ne peut avoir le même badge qu'une fois
+  @@index([userId])
+  @@index([badgeId])
+  @@map("user_badges")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  token     String    @db.Text
+  expiresAt DateTime  @map("expires_at")
+  revoked   Boolean   @default(false)
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token(length: 100)]) // Index partiel pour recherche rapide du token
+  @@index([userId, revoked]) // Index pour tokens actifs par utilisateur
+  @@map("refresh_tokens")
+}
+
+model Realisation {
+  id          String    @id @default(uuid())
+  nom         String    @unique @db.VarChar(100)
+  description String    @db.Text
+  objectif    Json
+  points      Int       @default(0)
+  isActive    Boolean   @default(true) @map("is_active") // Soft delete
+  deletedAt   DateTime? @map("deleted_at") // Soft delete timestamp
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  userRealisations UserRealisation[]
+
+  @@index([isActive]) // For filtering active realisations
+  @@map("realisations")
+}
+
+model UserRealisation {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  realisationId String    @map("realisation_id")
+  progression   Int       @default(0)
+  complete      Boolean   @default(false)
+  completeLe    DateTime? @map("complete_le")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  realisation Realisation @relation(fields: [realisationId], references: [id])
+
+  @@unique([userId, realisationId]) // Un utilisateur ne peut avoir qu'une progression par réalisation
+  @@index([userId])
+  @@index([realisationId])
+  @@map("user_realisations")
+}
+
+model Configuration {
+  cle       String   @id
+  valeur    String   @db.Text
+  type      String
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@map("configuration")
+}
+
+model Recommandation {
+  id                     String    @id @default(uuid())
+  type                   String    @db.VarChar(50)
+  titre                  String    @db.VarChar(255)
+  description            String    @db.Text
+  priorite               Int       @default(3)
+  parcelleId             String?   @map("parcelle_id")
+  userId                 String    @map("user_id")
+  generePar              String    @default("automatique") @map("genere_par") @db.VarChar(50)
+  valideDu               DateTime? @map("valide_du")
+  valideJusquAu          DateTime? @map("valide_jusqu_au")
+  appliquee              Boolean   @default(false)
+  dateApplication        DateTime? @map("date_application")
+  commentaireUtilisateur String?   @map("commentaire_utilisateur") @db.Text
+  noteUtilisateur        Int?      @map("note_utilisateur")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  parcelle Parcelle? @relation(fields: [parcelleId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([parcelleId])
+  @@index([userId])
+  @@index([userId, appliquee])
+  @@index([type])
+  @@map("recommandations")
+}
+
+model Plantation {
+  id                  String    @id @default(uuid())
+  parcelleId          String    @map("parcelle_id")
+  cultureId           String    @map("culture_id")
+  datePlantation      DateTime  @default(now()) @map("date_plantation")
+  dateRecolte         DateTime? @map("date_recolte")
+  dateFin             DateTime? @map("date_fin")
+  statut              String    @default("active") @db.VarChar(50)
+  quantitePlantee     Decimal?  @map("quantite_plantee") @db.Decimal(10, 2)
+  rendementParHectare Decimal?  @map("rendement_par_hectare") @db.Decimal(10, 2)
+  estActive           Boolean   @default(true) @map("est_active")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  parcelle Parcelle  @relation(fields: [parcelleId], references: [id], onDelete: Cascade)
+  culture  Culture   @relation(fields: [cultureId], references: [id])
+  recoltes Recolte[]
+
+  @@index([parcelleId])
+  @@index([cultureId])
+  @@index([dateFin]) // D-IDX-05: Index pour requêtes sur plantations terminées
+  @@index([estActive, parcelleId]) // Index composite pour plantations actives par parcelle
+  @@map("plantations")
+}
+
+model TransactionPaiement {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  commandeId        String?  @map("commande_id")
+  locationId        String?  @map("location_id")
+  achatGroupeId     String?  @map("achat_groupe_id")
+  montant           Decimal  @db.Decimal(12, 2)
+  fournisseur       String   @db.VarChar(50)
+  numeroTelephone   String   @map("numero_telephone") @db.VarChar(20)
+  referencePaiement String   @unique @map("reference_paiement") @db.VarChar(100)
+  statut            String   @default("en_attente") @db.VarChar(50)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // relationships to commande, location, etc. can be optional or loose if models aren't strictly defined yet
+  // Keeping them as loose IDs for now to match legacy behavior unless we are sure about relations.
+
+  @@index([userId])
+  @@index([statut])
+  @@map("transactions_paiement")
+}
+
+// Added for Equipment Controller
+model EquipementLocation {
+  id             String   @id @default(uuid())
+  proprietaireId String   @map("proprietaire_id")
+  nom            String   @db.VarChar(200)
+  categorie      String   @db.VarChar(100)
+  description    String   @db.Text
+  prixJour       Decimal  @map("prix_jour") @db.Decimal(10, 2)
+  caution        Decimal  @default(0) @db.Decimal(10, 2)
+  etat           String   @default("bon") @db.VarChar(50)
+  localisation   String   @db.VarChar(255)
+  latitude       Decimal? @db.Decimal(10, 8)
+  longitude      Decimal? @db.Decimal(11, 8)
+  disponible     Boolean  @default(true)
+  images         Json?
+  specifications Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  proprietaire User       @relation(fields: [proprietaireId], references: [id], onDelete: Cascade)
+  locations    Location[]
+
+  @@index([proprietaireId])
+  @@index([disponible, categorie])
+  @@map("equipements_location")
+}
+
+model Location {
+  id                   String   @id @default(uuid())
+  equipementId         String   @map("equipement_id")
+  locataireId          String   @map("locataire_id")
+  dateDebut            DateTime @map("date_debut") @db.Date
+  dateFin              DateTime @map("date_fin") @db.Date
+  dureeJours           Int      @map("duree_jours")
+  prixTotal            Decimal  @map("prix_total") @db.Decimal(12, 2)
+  cautionVersee        Decimal  @default(0) @map("caution_versee") @db.Decimal(12, 2)
+  statut               String   @default("demande") @db.VarChar(50)
+  commentaireProprio   String?  @map("commentaire_proprietaire") @db.Text
+  commentaireLocataire String?  @map("commentaire_locataire") @db.Text
+  evaluationNote       Int?     @map("evaluation_note")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  equipement EquipementLocation @relation(fields: [equipementId], references: [id], onDelete: Cascade)
+  locataire  User               @relation(fields: [locataireId], references: [id], onDelete: Cascade)
+
+  @@index([equipementId])
+  @@index([locataireId])
+  @@index([statut])
+  @@map("locations")
+}
+
+// Added for Group Purchases
+model AchatGroupe {
+  id               String   @id @default(uuid())
+  titre            String   @db.VarChar(255)
+  description      String   @db.Text
+  categorie        String   @db.VarChar(100)
+  prixUnitaire     Decimal  @map("prix_unitaire") @db.Decimal(12, 2)
+  prixGroupe       Decimal  @map("prix_groupe") @db.Decimal(12, 2)
+  quantiteObjectif Int      @map("quantite_objectif")
+  quantiteActuelle Int      @default(0) @map("quantite_actuelle")
+  minParPersonne   Int      @default(1) @map("min_par_personne")
+  dateLimite       DateTime @map("date_limite")
+  image            String?  @db.Text
+  statut           String   @default("en_cours") @db.VarChar(50)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  participations ParticipationAchatGroupe[]
+
+  @@index([statut, dateLimite]) // Index pour achats en cours non expirés
+  @@index([categorie]) // Index pour filtrage par catégorie
+  @@index([createdAt]) // Index pour tri chronologique
+  @@map("achats_groupes")
+}
+
+model ParticipationAchatGroupe {
+  id                String   @id @default(uuid())
+  achatGroupeId     String   @map("achat_groupe_id")
+  participantId     String   @map("participant_id")
+  quantite          Int
+  montant           Decimal  @db.Decimal(12, 2)
+  statut            String   @default("confirme") @db.VarChar(50)
+  dateParticipation DateTime @default(now()) @map("date_participation")
+
+  achatGroupe AchatGroupe @relation(fields: [achatGroupeId], references: [id], onDelete: Cascade)
+  participant User        @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([achatGroupeId, participantId]) // Un utilisateur ne peut participer qu'une fois par achat
+  @@index([achatGroupeId])
+  @@index([participantId])
+  @@map("participations_achat_groupe")
+}
+
+// Added for Maladies
+model Maladie {
+  id                String   @id @default(uuid())
+  nom               String   @unique @db.VarChar(100)
+  nomScientifique   String?  @map("nom_scientifique") @db.VarChar(150)
+  type              String   @db.VarChar(50)
+  description       String   @db.Text
+  symptomes         String   @db.Text
+  traitements       Json?
+  prevention        Json?
+  culturesAffectees Json?    @map("cultures_affectees")
+  images            Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  detections  DetectionMaladie[]
+  corrections DetectionMaladie[] @relation("Correction")
+
+  @@map("maladies")
+}
+
+model DetectionMaladie {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  parcelleId        String?   @map("parcelle_id")
+  cultureId         String?   @map("culture_id")
+  imageUrl          String    @map("image_url") @db.Text
+  maladieDetecteeId String?   @map("maladie_detectee_id")
+  confiance         Decimal   @db.Decimal(5, 4)
+  description       String?   @db.Text
+  resultatsBruts    Json?     @map("resultats_bruts")
+  confirme          Boolean   @default(false)
+  maladieCorrigeeId String?   @map("maladie_corrigee_id")
+  notesCorrection   String?   @map("notes_correction") @db.Text
+  dateConfirmation  DateTime? @map("date_confirmation")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parcelle        Parcelle? @relation(fields: [parcelleId], references: [id], onDelete: SetNull)
+  culture         Culture?  @relation(fields: [cultureId], references: [id], onDelete: SetNull)
+  maladieDetectee Maladie?  @relation(fields: [maladieDetecteeId], references: [id])
+  maladieCorrigee Maladie?  @relation("Correction", fields: [maladieCorrigeeId], references: [id])
+
+  @@index([userId])
+  @@index([parcelleId])
+  @@index([maladieDetecteeId])
+  @@index([confirme, createdAt]) // For querying pending/confirmed detections
+  @@map("detections_maladies")
+}
+
+// Added for Formation Controller Refactoring due to legacy mismatches
+model FichePratique {
+  id          String   @id @default(uuid())
+  titre       String   @db.VarChar(255)
+  description String?  @db.Text
+  categorie   String   @db.VarChar(100)
+  langue      String   @default("fr") @db.VarChar(10)
+  contenu     String?  @db.Text
+  fichierUrl  String?  @map("fichier_url") @db.Text
+  estPublic   Boolean  @default(true) @map("est_public")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("fiches_pratiques")
+}
+
+model UserFormationLegacy {
+  userId              String   @map("user_id")
+  formationId         String   @map("formation_id")
+  progressPourcentage Int      @default(0) @map("progress_pourcentage")
+  tempsVisionne       Int      @default(0) @map("temps_visionne")
+  estTerminee         Boolean  @default(false) @map("est_terminee")
+  dernierAcces        DateTime @default(now()) @map("dernier_acces")
+  note                Int?
+  commentaire         String?  @db.Text
+
+  // No relations defined to avoid modifying User/Formation models. Use direct ID access or raw queries.
+
+  @@id([userId, formationId])
+  @@map("user_formations")
+}
+
+// New tables for analytics and tracking
+
+model Economies {
+  id                          String   @id @default(uuid())
+  userId                      String   @map("user_id")
+  eauEconomiseePourcentage    Decimal  @default(0) @map("eau_economisee_pourcentage") @db.Decimal(5, 2)
+  engraisEconomisePourcentage Decimal  @default(0) @map("engrais_economise_pourcentage") @db.Decimal(5, 2)
+  pertesEviteesPourcentage    Decimal  @default(0) @map("pertes_evitees_pourcentage") @db.Decimal(5, 2)
+  valeurEauEconomiseeFcfa     Decimal  @default(0) @map("valeur_eau_economisee_fcfa") @db.Decimal(15, 2)
+  valeurEngraisEconomiseFcfa  Decimal  @default(0) @map("valeur_engrais_economise_fcfa") @db.Decimal(15, 2)
+  valeurPertesEviteesFcfa     Decimal  @default(0) @map("valeur_pertes_evitees_fcfa") @db.Decimal(15, 2)
+  economiesTotalesFcfa        Decimal  @default(0) @map("economies_totales_fcfa") @db.Decimal(15, 2)
+  dateDebut                   DateTime @map("date_debut")
+  dateFin                     DateTime @map("date_fin")
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([dateFin])
+  @@map("economies")
+}
+
+model Recolte {
+  id                  String   @id @default(uuid())
+  plantationId        String   @map("plantation_id")
+  quantiteKg          Decimal  @map("quantite_kg") @db.Decimal(10, 2)
+  rendementParHectare Decimal? @map("rendement_par_hectare") @db.Decimal(10, 2)
+  qualite             String?  @db.VarChar(50)
+  dateRecolte         DateTime @map("date_recolte")
+  notes               String?  @db.Text
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  plantation Plantation @relation(fields: [plantationId], references: [id], onDelete: Cascade)
+
+  @@index([plantationId])
+  @@index([dateRecolte])
+  @@map("recoltes")
+}
+
+model PerformanceParcelle {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  parcelleId        String   @map("parcelle_id")
+  annee             Int
+  rendementMoyen    Decimal? @map("rendement_moyen") @db.Decimal(10, 2)
+  scoreQualiteSol   Decimal? @map("score_qualite_sol") @db.Decimal(5, 2)
+  meilleurePratique String?  @map("meilleure_pratique") @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parcelle Parcelle @relation(fields: [parcelleId], references: [id], onDelete: Cascade)
+
+  @@unique([parcelleId, annee])
+  @@index([userId])
+  @@index([annee])
+  @@map("performance_parcelles")
+}
+
+model Stock {
+  id             String        @id @default(uuid())
+  userId         String        @map("user_id")
+  parcelleId     String?       @map("parcelle_id")
+  nom            String        @db.VarChar(200)
+  categorie      StockCategory
+  type           String        @db.VarChar(100) // Type spécifique (ex: Semences de Maïs, Engrais NPK)
+  quantite       Decimal       @db.Decimal(10, 2)
+  unite          String        @db.VarChar(20) // kg, L, sacs, etc.
+  seuilAlerte    Decimal       @map("seuil_alerte") @db.Decimal(10, 2) // Niveau minimum avant alerte
+  prixUnitaire   Decimal?      @map("prix_unitaire") @db.Decimal(10, 2)
+  dateAchat      DateTime?     @map("date_achat") @db.Date
+  dateExpiration DateTime?     @map("date_expiration") @db.Date
+  fournisseur    String?       @db.VarChar(200)
+  localisation   String?       @db.VarChar(200) // Où est stocké le produit
+  notes          String?       @db.Text
+  estActif       Boolean       @default(true) @map("est_actif")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parcelle     Parcelle?        @relation(fields: [parcelleId], references: [id], onDelete: SetNull)
+  mouvements   MouvementStock[]
+  alertesStock AlerteStock[]
+
+  @@index([userId])
+  @@index([parcelleId])
+  @@index([categorie])
+  @@map("stocks")
+}
+
+model MouvementStock {
+  id            String        @id @default(uuid())
+  stockId       String        @map("stock_id")
+  typeMouvement TypeMouvement @map("type_mouvement")
+  quantite      Decimal       @db.Decimal(10, 2)
+  quantiteAvant Decimal       @map("quantite_avant") @db.Decimal(10, 2)
+  quantiteApres Decimal       @map("quantite_apres") @db.Decimal(10, 2)
+  motif         String?       @db.Text
+  reference     String?       @db.VarChar(100) // Référence d'achat, de vente, etc.
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@index([stockId])
+  @@index([typeMouvement])
+  @@index([createdAt])
+  @@map("mouvements_stock")
+}
+
+model AlerteStock {
+  id         String     @id @default(uuid())
+  stockId    String     @map("stock_id")
+  typeAlerte TypeAlerte @map("type_alerte")
+  message    String     @db.Text
+  estLue     Boolean    @default(false) @map("est_lue")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@index([stockId])
+  @@index([estLue])
+  @@map("alertes_stock")
+}
+
+model Meteo {
+  id            String   @id @default(uuid())
+  latitude      Decimal  @db.Decimal(10, 8)
+  longitude     Decimal  @db.Decimal(11, 8)
+  temperature   Decimal  @db.Decimal(5, 2)
+  humiditeAir   Decimal  @map("humidite_air") @db.Decimal(5, 2)
+  pression      Decimal? @db.Decimal(8, 2)
+  vitesseVent   Decimal? @map("vitesse_vent") @db.Decimal(5, 2)
+  directionVent Decimal? @map("direction_vent") @db.Decimal(10, 2)
+  description   String?  @db.VarChar(255)
+  observationAt DateTime @default(now()) @map("observation_at")
+  source        String?  @db.VarChar(50)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([latitude, longitude])
+  @@index([observationAt])
+  @@map("meteo")
+}
+
+// ============================================
+// CALENDRIER AGRICOLE
+// ============================================
+
+enum TypeActivite {
+  SEMIS
+  PLANTATION
+  ARROSAGE
+  FERTILISATION
+  TRAITEMENT
+  DESHERBAGE
+  TAILLE
+  RECOLTE
+  AUTRE
+}
+
+enum StatutActivite {
+  PLANIFIEE
+  EN_COURS
+  TERMINEE
+  ANNULEE
+  REPORTEE
+}
+
+enum PrioriteActivite {
+  BASSE
+  MOYENNE
+  HAUTE
+  URGENTE
+}
+
+model CalendrierActivite {
+  id           String           @id @default(uuid())
+  userId       String           @map("user_id")
+  parcelleId   String?          @map("parcelle_id")
+  titre        String           @db.VarChar(255)
+  description  String?          @db.Text
+  typeActivite TypeActivite     @map("type_activite")
+  statut       StatutActivite   @default(PLANIFIEE)
+  priorite     PrioriteActivite @default(MOYENNE)
+
+  // Dates
+  dateDebut  DateTime  @map("date_debut")
+  dateFin    DateTime? @map("date_fin")
+  dateRappel DateTime? @map("date_rappel")
+
+  // Récurrence
+  estRecurrente     Boolean   @default(false) @map("est_recurrente")
+  frequenceJours    Int?      @map("frequence_jours") // Nombre de jours entre chaque occurrence
+  dateFinRecurrence DateTime? @map("date_fin_recurrence")
+
+  // Détails
+  coutEstime       Decimal? @map("cout_estime") @db.Decimal(10, 2)
+  notesTechniques  String?  @map("notes_techniques") @db.Text
+  produitsUtilises String?  @map("produits_utilises") @db.Text // JSON array
+
+  // Notification envoyée
+  rappelEnvoye Boolean @default(false) @map("rappel_envoye")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parcelle Parcelle? @relation(fields: [parcelleId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([parcelleId])
+  @@index([typeActivite])
+  @@index([statut])
+  @@index([dateDebut])
+  @@index([dateRappel])
+  @@map("calendrier_activites")
+}
+
+model UserPoint {
+  id                String    @id @default(uuid())
+  userId            String    @unique @map("user_id")
+  pointsTotal       Int       @default(0) @map("points_total")
+  niveau            Int       @default(1)
+  actionsCompletees Int       @default(0) @map("actions_completees")
+  derniereActivite  DateTime? @map("derniere_activite")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_points")
+}
+
+model Conversation {
+  id               String    @id @default(uuid())
+  type             String    @default("prive") @db.VarChar(20)
+  nom              String?   @db.VarChar(255)
+  participants     Json // JSON array of user IDs
+  adminId          String?   @map("admin_id")
+  estActif         Boolean   @default(true) @map("est_actif")
+  dernierMessageAt DateTime? @map("dernier_message_at")
+  nbMessages       Int       @default(0) @map("nb_messages")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  messages Message[]
+
+  @@map("conversations")
+}

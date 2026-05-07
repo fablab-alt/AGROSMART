@@ -1,0 +1,81 @@
+{
+  "name": "agrismart-ci-backend",
+  "version": "1.0.0",
+  "description": "Backend du système agricole intelligent pour la Côte d'Ivoire - IoT & IA",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:migrate": "npx prisma migrate deploy",
+    "db:migrate:dev": "npx prisma migrate dev",
+    "db:seed": "node scripts/seed.js",
+    "seed": "npm run db:seed",
+    "post:deploy:oneshot": "bash scripts/post_deploy_oneshot.sh",
+    "db:reset": "npx prisma migrate reset --force",
+    "db:push": "npx prisma db push",
+    "db:studio": "npx prisma studio",
+    "test:security": "node scripts/security-audit.js",
+    "test:prod-validation": "node scripts/prod_validation_e2e.js",
+    "test:platform-validation": "node scripts/platform_validation_e2e.js",
+    "audit:security": "node scripts/npm-audit.js",
+    "audit:deps": "npm audit --audit-level=moderate",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
+  },
+  "keywords": [
+    "agriculture",
+    "iot",
+    "ia",
+    "cote-divoire",
+    "smart-farming",
+    "sensors"
+  ],
+  "author": "AgroSmart Team",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^6.9.0",
+    "axios": "^1.13.5",
+    "bcryptjs": "^3.0.3",
+    "ci-info": "^4.4.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.6",
+    "cron": "^4.4.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "express-validator": "^7.3.1",
+    "form-data": "^4.0.5",
+    "helmet": "^8.1.0",
+    "hpp": "^0.2.3",
+    "json2csv": "^6.0.0-alpha.2",
+    "jsonwebtoken": "^9.0.3",
+    "mariadb": "^3.4.5",
+    "morgan": "^1.10.1",
+    "multer": "^2.0.2",
+    "mysql2": "^3.16.3",
+    "nodemailer": "^7.0.13",
+    "sharp": "^0.34.5",
+    "socket.io": "^4.8.3",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "twilio": "^5.12.1",
+    "uuid": "^13.0.0",
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^16.5.0",
+    "nodemon": "^3.1.11",
+    "prisma": "^6.9.0",
+    "typescript-eslint": "^8.54.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "overrides": {
+    "effect": "^3.20.0"
+  }
+}

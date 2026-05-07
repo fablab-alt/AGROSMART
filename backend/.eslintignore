@@ -1,0 +1,12 @@
+# Ignore k6 load test files (they use k6 runtime globals)
+tests/load/
+
+# Ignore coverage reports
+coverage/
+
+# Ignore node_modules (already ignored by default)
+node_modules/
+
+# Ignore build artifacts
+dist/
+build/

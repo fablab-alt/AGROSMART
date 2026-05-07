@@ -1,0 +1,46 @@
+{
+  "@@locale": "bm",
+  
+  "appTitle": "AgroSmart",
+  "welcome": "Aw ni ce",
+  "dashboard": "Tableau de bord",
+  "parcelles": "Parcelles",
+  "sensors": "Capteurs",
+  "alerts": "Kunnafoni",
+  "marketplace": "Sugu yɔrɔ",
+  "profile": "Ka taamaʃin",
+  "settings": "Labɛncogo",
+  "logout": "Bɔ",
+  
+  "weather": "Waati",
+  "weatherForecast": "Waati laɲini",
+  "temperaturé": "Funteni",
+  "humidity": "Jikuru",
+  "rainfall": "Sanjikalan",
+  "wind": "Fɔnba",
+  
+  "training": "Kalan",
+  "library": "Gafe",
+  "myProgress": "N ka ɲɛtaa",
+  
+  "chat": "Kuma",
+  "community": "Sigida",
+  "forum": "Laɲiniko yɔrɔ",
+  
+  "points": "Points",
+  "badges": "Taamaʃin",
+  "level": "Jɔyɔrɔ",
+  
+  "cancel": "Dabila",
+  "save": "Mara",
+  "delete": "Yɔrɔba",
+  "edit": "Yɔrɔba",
+  "add": "Fara",
+  "search": "Ɲini",
+  "loading": "Ka daminɛ...",
+  "error": "Fili",
+  "success": "A sera kosɛbɛ",
+  
+  "noDataAvailable": "Kunnafoni tɛ",
+  "tryAgain": "Segin kokura"
+}

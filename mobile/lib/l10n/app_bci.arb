@@ -1,0 +1,72 @@
+{
+  "@@locale": "bci",
+  
+  "appTitle": "AgroSmart",
+  "welcome": "Akwaba",
+  "dashboard": "Tableau de bord",
+  "parcelles": "Abo",
+  "sensors": "Capteurs",
+  "alerts": "Kpane",
+  "marketplace": "Sra yɔ",
+  "profile": "Wunun",
+  "settings": "Ninnge",
+  "logout": "Fi nun",
+  
+  "weather": "Awiɛ",
+  "weatherForecast": "Awiɛ nianlɛ",
+  "temperature": "Wunun",
+  "humidity": "Nzue",
+  "rainfall": "Nzue tɔlɛ",
+  "wind": "Awe",
+  
+  "training": "Sukul",
+  "library": "Fluwa",
+  "myProgress": "N'gazo",
+  
+  "chat": "Koko",
+  "community": "Klo",
+  "forum": "Koko yɔ",
+  
+  "points": "Point",
+  "badges": "Badge",
+  "level": "Niveau",
+  
+  "cancel": "Yacilɛ",
+  "save": "Sie",
+  "delete": "Nun nun",
+  "edit": "Kaci",
+  "add": "Uka",
+  "search": "Kunndɛ",
+  "loading": "Su kaci...",
+  "error": "Fɔ",
+  "success": "Yo ye",
+  
+  "noDataAvailable": "Liké fi nunman",
+  "tryAgain": "Nian eka",
+  
+  "loginIdentifier": "Login",
+  "loginPassword": "MDP",
+  "loginButton": "Kô nou",
+  "loginError": "Erreur",
+  
+  "addParcelle": "Uka Abo",
+  "parcelleName": "Dunman",
+  "parcelleArea": "Anglo",
+  "parcelleCulture": "N'gazo",
+  
+  "formationTitle": "Sukul",
+  "formationProgress": "N'gazo",
+  "formationStart": "Bo bo",
+  "formationContinue": "Continuer",
+  
+  "marketBuy": "To",
+  "marketSell": "Yo",
+  "marketRent": "Louer",
+  
+  "paymentMethod": "Paiement",
+  "payNow": "Payer",
+  
+  "diagnosisTitle": "Dogo",
+  "takePhoto": "Foto",
+  "analyze": "Nian"
+}

@@ -1,0 +1,36 @@
+.git
+.gitignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Dependencies and build artifacts
+**/node_modules
+**/.next
+**/dist
+**/build
+**/coverage
+
+# Logs and runtime data
+logs
+*.log
+backend/logs
+backend/uploads
+
+# Unused services for this deployment scope
+ai_service
+iot_service
+mobile
+logo_extracted
+
+# Local tooling
+.vscode
+.idea
+.DS_Store
+
+# Deployment files not needed in image context
+docker-compose.yml
+docker-compose.*.yml
+
