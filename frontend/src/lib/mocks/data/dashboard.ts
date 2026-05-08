@@ -6,16 +6,20 @@ import { mockUserGamification } from './communaute'
 import { mockStockStats } from './stocks'
 import { mockCalendrierStats, mockProchainesActivites } from './calendrier'
 import { mockROI, mockRevenusParMois, mockPerformanceStats } from './performance'
+import { mockMesures } from './mesures'
 
 const nbParcelles = mockParcelles.length
 const superficieTotal = mockParcelles.reduce((s, p) => s + (p.superficie_hectares ?? 0), 0)
 const alertesActives = getUnreadAlertesCount()
 const capteurActifs = mockCapteurs.filter((c) => c.status === 'ACTIF').length
+const productionTonnesEstimee = Math.round(
+  mockROI.reduce((s, r) => s + r.superficie_ha * 1.2, 0) * 10,
+) / 10  // tonnes estimées depuis superficies × rendement moyen
 
 // ── Shape attendue par /dashboard/stats (dashboard/page.tsx) ─────────────────
-// Le composant lit : d.parcelles.count, d.alertes, d.capteurs.total, d.superficie, etc.
+// Le composant lit : d.parcelles.count, d.alertes, d.capteurs (nombre flat),
+//                    d.production.volume_tonnes
 export const mockDashboardStats = {
-  // Objets imbriqués — correspondance exacte avec ce que le composant lit
   parcelles: {
     count: nbParcelles,
     total: nbParcelles,
@@ -24,7 +28,9 @@ export const mockDashboardStats = {
     surveillance: mockParcelles.filter((p) => p.sante === 'SURVEILLANCE').length,
     critique: mockParcelles.filter((p) => p.sante === 'CRITIQUE').length,
   },
-  capteurs: {
+  // ⚠️ Le dashboard lit `d.capteurs` comme un nombre flat (capteurs actifs)
+  capteurs: capteurActifs,
+  capteurs_detail: {
     total: mockCapteurs.length,
     actifs: capteurActifs,
     maintenance: mockCapteurs.filter((c) => c.status === 'MAINTENANCE').length,
@@ -33,6 +39,15 @@ export const mockDashboardStats = {
   alertes: alertesActives,
   alertes_critiques: mockAlertes.filter((a) => a.niveau === 'critique' && !a.lu_at).length,
   messages_non_lus: mockUnreadMessagesCount,
+  // Production estimée — dashboard lit d.production.volume_tonnes
+  production: {
+    volume_tonnes: productionTonnesEstimee,
+    valeur_xof: mockPerformanceStats.revenu_total,
+  },
+  superficie: {
+    total_ha: superficieTotal,
+    cultivee_ha: superficieTotal,
+  },
 
   // Activités
   activites_a_faire: mockCalendrierStats.total_a_faire,
@@ -99,13 +114,38 @@ export const mockAnalyticsStats = {
 }
 
 // ── Shape attendue par /dashboard/cultures ───────────────────────────────────
-export const mockDashboardCultures = mockROI.map((r) => ({
-  culture: r.culture,
+// Le PieChart du dashboard lit { name, value, color } (value en hectares)
+const COLORS = ['#16a34a', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444', '#06b6d4']
+export const mockDashboardCultures = mockROI.map((r, i) => ({
+  name: r.culture,
+  value: r.superficie_ha,
+  color: COLORS[i % COLORS.length],
+  // champs étendus pour autres pages
   superficie: r.superficie_ha,
   revenu: r.revenu_total,
   roi: r.roi_pct,
-  color: ['#16a34a', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444'][mockROI.indexOf(r) % 5],
 }))
+
+// ── Mesures groupées par jour pour /mesures/recent ───────────────────────────
+// Le dashboard attend [{date, humidite, temperature, ph}] — moyenne par jour
+function buildMesuresParJour() {
+  const byDate: Record<string, { temps: number[]; hums: number[]; phs: number[] }> = {}
+  for (const m of mockMesures) {
+    const date = m.mesure_at.split('T')[0]
+    if (!byDate[date]) byDate[date] = { temps: [], hums: [], phs: [] }
+    if (m.capteur_type === 'temperature') byDate[date].temps.push(m.valeur)
+    else if (m.capteur_type === 'humidite') byDate[date].hums.push(m.valeur)
+    else if (m.capteur_type === 'ph') byDate[date].phs.push(m.valeur)
+  }
+  const avg = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0
+  return Object.keys(byDate).sort().slice(-7).map((date) => ({
+    date: new Date(date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+    humidite: Math.round(avg(byDate[date].hums) * 10) / 10,
+    temperature: Math.round(avg(byDate[date].temps) * 10) / 10,
+    ph: Math.round(avg(byDate[date].phs) * 100) / 100,
+  }))
+}
+export const mockMesuresRecentes = buildMesuresParJour()
 
 // ── KPI cards ────────────────────────────────────────────────────────────────
 export const mockKPICards = [

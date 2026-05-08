@@ -15,15 +15,16 @@ import { getMesuresByCapteur, getLatestMesures, getDashboardMesures, mockMesures
 import { mockAlertes, getUnreadAlertesCount } from './data/alertes'
 import { mockRecommandations } from './data/recommandations'
 import { mockMeteoActuelle, mockMeteoPrevisions, mockMeteoHistorique } from './data/meteo'
-import { mockProduits, mockCommandes, mockFavoris, mockVendeurStats, getProduitById } from './data/marketplace'
+import { mockProduits, mockCommandes, mockFavoris, mockVendeurStats, mockMyRentals, getProduitById } from './data/marketplace'
 import { mockFormations, getFormationById } from './data/formations'
 import { mockStocks, mockStockMouvements, mockStockStats } from './data/stocks'
 import { mockActivites, mockProchainesActivites, mockCalendrierStats } from './data/calendrier'
 import { mockFichesPratiques, mockFichesCategories } from './data/fichesPratiques'
-import { mockPosts, mockLeaderboard, mockUserGamification } from './data/communaute'
+import { mockPosts, mockReponses, mockLeaderboard, mockUserGamification, getPostDetailMock } from './data/communaute'
+import { mockFriends, mockReceivedRequests, mockSentRequests, mockSuggestions, getFriendshipStatusFor } from './data/friendships'
 import { mockConversations, mockMessages, mockUnreadMessagesCount } from './data/messages'
 import { mockROI, mockRendements, mockComparaisonSaisonniere, mockRevenusParMois, mockPerformanceStats } from './data/performance'
-import { mockDashboardStats, mockAnalyticsStats, mockDashboardCultures, mockKPICards, mockRepartitionCultures } from './data/dashboard'
+import { mockDashboardStats, mockAnalyticsStats, mockDashboardCultures, mockKPICards, mockRepartitionCultures, mockMesuresRecentes } from './data/dashboard'
 import { VISITOR_USER } from './data/user'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -205,7 +206,9 @@ const ROUTES: Array<{ p: RegExp; m: string; h: RouteHandler }> = [
   { p: /\/capteurs\/[^/]+$/, m: 'DELETE', h: () => handleMutation('DELETE') },
 
   // ── MESURES ──────────────────────────────────────────────────────────────
-  { p: /\/mesures\/recent/, m: 'GET', h: () => getLatestMesures(200) },
+  // /mesures/recent : utilisé par le dashboard pour le graph 7 jours
+  // → tableau d'objets {date, humidite, temperature, ph} (1 point/jour)
+  { p: /\/mesures\/recent/, m: 'GET', h: () => mockMesuresRecentes },
   { p: /\/mesures\/latest/, m: 'GET', h: () => getLatestMesures(50) },
   { p: /\/mesures/, m: 'GET', h: (c) => {
     const capteurId = extractParam(c.url, 'capteur_id')
@@ -353,26 +356,59 @@ const ROUTES: Array<{ p: RegExp; m: string; h: RouteHandler }> = [
   { p: /\/messages\/[^/]+\/read/, m: 'PUT', h: () => ok(null) },
   { p: /\/messages$/, m: 'POST', h: (c) => handleMutation('POST', c.data) },
 
-  // ── COMMUNAUTÉ ───────────────────────────────────────────────────────────
+  // ── COMMUNAUTÉ (FORUM) ───────────────────────────────────────────────────
   { p: /\/communaute\/stats/, m: 'GET', h: () => ({
     membresActifs: 1420,
     postsAujourd_hui: 7,
     postsPublies: mockPosts.length,
     reponsesAujourd_hui: 23,
+    badges: mockUserGamification.badges,
+    points: mockUserGamification.points,
+    niveau: mockUserGamification.niveau,
+    rang: mockUserGamification.rang,
     topContributeurs: mockLeaderboard.slice(0, 3).map((u) => ({ nom: u.nom, points: u.points })),
   })},
   { p: /\/communaute\/leaderboard/, m: 'GET', h: () => mockLeaderboard },
   { p: /\/communaute\/gamification/, m: 'GET', h: () => mockUserGamification },
-  // /communaute/posts — plain array (page does .map() directly on data.data)
+  // GET /communaute/posts/:id/reponses — alias séparé (utilisé par certains clients)
+  { p: /\/communaute\/posts\/[^/]+\/reponses$/, m: 'GET', h: (c) => {
+    const parts = c.url?.split('/') ?? []
+    const id = parts[parts.indexOf('posts') + 1]
+    return mockReponses[id] ?? []
+  }},
+  // POST /communaute/posts/:id/reponses — créer une réponse
+  { p: /\/communaute\/posts\/[^/]+\/reponses$/, m: 'POST', h: (c) => handleMutation('POST', c.data) },
+  // PUT /communaute/posts/:postId/reponses/:reponseId/solution — marquer solution
+  { p: /\/communaute\/posts\/[^/]+\/reponses\/[^/]+\/solution/, m: 'PUT', h: () => ok(null) },
+  // POST /communaute/posts/:id/like — liker un post
+  { p: /\/communaute\/posts\/[^/]+\/like/, m: 'POST', h: () => ok({ liked: true }) },
+  // POST /communaute/posts/:id/reponses/:repId/upvote — upvoter une réponse
+  { p: /\/communaute\/posts\/[^/]+\/reponses\/[^/]+\/upvote/, m: 'POST', h: () => ok(null) },
+  // GET /communaute/posts/:id — détail post avec réponses imbriquées
+  { p: /\/communaute\/posts\/[^/]+$/, m: 'GET', h: (c) => {
+    const id = extractIdFromUrl(c.url)
+    return getPostDetailMock(id) ?? getPostDetailMock(mockPosts[0].id)
+  }},
+  // GET /communaute/posts — liste plate
   { p: /\/communaute\/posts$/, m: 'GET', h: () => mockPosts },
+  // POST /communaute/posts — créer un post
+  { p: /\/communaute\/posts$/, m: 'POST', h: (c) => handleMutation('POST', c.data) },
+  // DELETE /communaute/posts/:id
+  { p: /\/communaute\/posts\/[^/]+$/, m: 'DELETE', h: () => handleMutation('DELETE') },
+  // PUT /communaute/posts/:id — éditer un post
+  { p: /\/communaute\/posts\/[^/]+$/, m: 'PUT', h: (c) => handleMutation('PUT', c.data) },
+  // GET /communaute/categories
+  { p: /\/communaute\/categories/, m: 'GET', h: () => [
+    'Cacao', 'Maladies', 'Marketplace', 'Irrigation', 'Hévéa',
+    'Témoignages', 'Bio', 'Annonces', 'Coopération', 'Maraîchage', 'Général',
+  ]},
+  // Legacy fallbacks (anciens endpoints)
   { p: /\/communaute\/[^/]+$/, m: 'GET', h: (c) => mockPosts.find((p) => p.id === extractIdFromUrl(c.url)) ?? mockPosts[0] },
   { p: /\/communaute$/, m: 'GET', h: (c) => {
     const { items, total, page, limit } = paginateItems(mockPosts, c)
     return okList(items, total, page, limit)
   }},
   { p: /\/communaute$/, m: 'POST', h: (c) => handleMutation('POST', c.data) },
-  { p: /\/communaute\/[^/]+\/reponse/, m: 'POST', h: (c) => handleMutation('POST', c.data) },
-  { p: /\/communaute\/[^/]+\/like/, m: 'POST', h: () => ok(null) },
 
   // ── ANALYTICS / PERFORMANCE ──────────────────────────────────────────────
   // /analytics/stats — for performance/page.tsx
@@ -384,12 +420,24 @@ const ROUTES: Array<{ p: RegExp; m: string; h: RouteHandler }> = [
   { p: /\/performance\/revenus/, m: 'GET', h: () => mockRevenusParMois },
   { p: /\/performance\/cultures/, m: 'GET', h: () => mockRepartitionCultures },
 
-  // ── ÉQUIPEMENTS ──────────────────────────────────────────────────────────
-  { p: /\/equipment\/rentals\/my-rentals/, m: 'GET', h: () => [] },
-  { p: /\/equipment\/rentals\/requests/, m: 'GET', h: () => [] },
-  { p: /\/equipment$/, m: 'GET', h: () => okList([], 0, 1, 20) },
+  // ── ÉQUIPEMENTS / LOCATION ──────────────────────────────────────────────
+  // Mes locations en cours
+  { p: /\/equipment\/rentals\/my-rentals/, m: 'GET', h: () => mockMyRentals },
+  // Demandes de location reçues (en tant que loueur)
+  { p: /\/equipment\/rentals\/requests/, m: 'GET', h: () => [
+    { id: 'req-001', equipement_nom: 'Motoculteur 9 CV', locataire_nom: 'Aïssata Bamba', date_debut: '2026-05-12', date_fin: '2026-05-15', statut: 'EN_ATTENTE', montant: 36000 },
+  ]},
+  // Liste des équipements louables (équivalent au filtre type_offre=location)
+  { p: /\/equipment$/, m: 'GET', h: (c) => {
+    const locations = mockProduits.filter((p) => p.type_offre === 'location')
+    const { items, total, page, limit } = paginateItems(locations, c)
+    return okList(items, total, page, limit)
+  }},
+  { p: /\/equipment\/[^/]+$/, m: 'GET', h: (c) => mockProduits.find((p) => p.id === extractIdFromUrl(c.url) && p.type_offre === 'location') ?? mockProduits[0] },
   { p: /\/equipment$/, m: 'POST', h: (c) => handleMutation('POST', c.data) },
   { p: /\/equipment\/[^/]+\/rent/, m: 'POST', h: (c) => handleMutation('POST', c.data) },
+  { p: /\/equipment\/rentals\/[^/]+\/status/, m: 'PUT', h: () => ok(null) },
+  { p: /\/equipment\/rentals\/[^/]+$/, m: 'DELETE', h: () => handleMutation('DELETE') },
 
   // ── DIAGNOSTICS ──────────────────────────────────────────────────────────
   { p: /\/diagnostics\/history/, m: 'GET', h: () => [
@@ -405,6 +453,26 @@ const ROUTES: Array<{ p: RegExp; m: string; h: RouteHandler }> = [
   // ── PAYMENTS ─────────────────────────────────────────────────────────────
   { p: /\/payments/, m: 'POST', h: () => handleMutation('POST') },
   { p: /\/payments/, m: 'GET', h: () => okList([], 0, 1, 20) },
+
+  // ── FRIENDSHIPS (réseau social) ──────────────────────────────────────────
+  // GET /friendships — liste d'amis confirmés
+  { p: /\/friendships$/, m: 'GET', h: () => mockFriends },
+  // GET /friendships/suggestions — utilisateurs à proximité
+  { p: /\/friendships\/suggestions/, m: 'GET', h: () => mockSuggestions },
+  // GET /friendships/status/:userId — statut d'amitié avec un autre user
+  { p: /\/friendships\/status\/[^/]+$/, m: 'GET', h: (c) => getFriendshipStatusFor(extractIdFromUrl(c.url)) },
+  // GET /friendships/requests/received — demandes reçues
+  { p: /\/friendships\/requests\/received/, m: 'GET', h: () => mockReceivedRequests },
+  // GET /friendships/requests/sent — demandes envoyées
+  { p: /\/friendships\/requests\/sent/, m: 'GET', h: () => mockSentRequests },
+  // POST /friendships — envoyer une demande
+  { p: /\/friendships$/, m: 'POST', h: (c) => handleMutation('POST', c.data) },
+  // PATCH /friendships/:id/accept
+  { p: /\/friendships\/[^/]+\/accept/, m: 'PATCH', h: () => ok({ status: 'ACCEPTED' }, { message: 'Demande acceptée (mode démo)' }) },
+  // PATCH /friendships/:id/reject
+  { p: /\/friendships\/[^/]+\/reject/, m: 'PATCH', h: () => ok({ status: 'REJECTED' }, { message: 'Demande refusée (mode démo)' }) },
+  // DELETE /friendships/:id — retirer un ami
+  { p: /\/friendships\/[^/]+$/, m: 'DELETE', h: () => handleMutation('DELETE') },
 ]
 
 // ── Route matching ─────────────────────────────────────────────────────────

@@ -7,6 +7,18 @@ abstract class ForumRemoteDataSource {
   Future<ForumPostModel> getPostDetails(String id);
   Future<ForumPostModel> createPost(Map<String, dynamic> data);
   Future<ForumReponseModel> createReply(String postId, String content);
+  // Édition / suppression (auteur ou admin)
+  Future<void> updatePost(String id, Map<String, dynamic> data);
+  Future<void> deletePost(String id);
+  Future<void> updateReply(String postId, String reponseId, String content);
+  Future<void> deleteReply(String postId, String reponseId);
+  // Likes & upvotes (toggle)
+  Future<Map<String, dynamic>> toggleLikePost(String postId);
+  Future<Map<String, dynamic>> toggleUpvoteReply(String postId, String reponseId);
+  // Marquer comme solution
+  Future<void> markSolution(String postId, String reponseId);
+  // Catégories
+  Future<List<Map<String, dynamic>>> getCategories();
 }
 
 class ForumRemoteDataSourceImpl implements ForumRemoteDataSource {
@@ -97,5 +109,90 @@ class ForumRemoteDataSourceImpl implements ForumRemoteDataSource {
     } catch (e) {
       throw Exception('Network error: $e');
     }
+  }
+
+  @override
+  Future<void> updatePost(String id, Map<String, dynamic> data) async {
+    final token = await _getToken();
+    final response = await dio.put(
+      '/communaute/posts/$id',
+      data: data,
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to update post');
+  }
+
+  @override
+  Future<void> deletePost(String id) async {
+    final token = await _getToken();
+    final response = await dio.delete(
+      '/communaute/posts/$id',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to delete post');
+  }
+
+  @override
+  Future<void> updateReply(String postId, String reponseId, String content) async {
+    final token = await _getToken();
+    final response = await dio.put(
+      '/communaute/posts/$postId/reponses/$reponseId',
+      data: {'contenu': content},
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to update reply');
+  }
+
+  @override
+  Future<void> deleteReply(String postId, String reponseId) async {
+    final token = await _getToken();
+    final response = await dio.delete(
+      '/communaute/posts/$postId/reponses/$reponseId',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to delete reply');
+  }
+
+  @override
+  Future<Map<String, dynamic>> toggleLikePost(String postId) async {
+    final token = await _getToken();
+    final response = await dio.post(
+      '/communaute/posts/$postId/like',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to toggle like');
+    return Map<String, dynamic>.from(response.data['data'] ?? {});
+  }
+
+  @override
+  Future<Map<String, dynamic>> toggleUpvoteReply(String postId, String reponseId) async {
+    final token = await _getToken();
+    final response = await dio.post(
+      '/communaute/posts/$postId/reponses/$reponseId/upvote',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to toggle upvote');
+    return Map<String, dynamic>.from(response.data['data'] ?? {});
+  }
+
+  @override
+  Future<void> markSolution(String postId, String reponseId) async {
+    final token = await _getToken();
+    final response = await dio.put(
+      '/communaute/posts/$postId/reponses/$reponseId/solution',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to mark solution');
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getCategories() async {
+    final token = await _getToken();
+    final response = await dio.get(
+      '/communaute/categories',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to load categories');
+    return List<Map<String, dynamic>>.from(response.data['data'] ?? []);
   }
 }

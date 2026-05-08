@@ -39,6 +39,7 @@ const calendrierRoutes = require('./calendrier');
 const uploadRoutes = require('./upload');
 const reviewsRoutes = require('./reviews');
 const wishlistRoutes = require('./wishlist');
+const friendshipsRoutes = require('./friendships');
 
 // =====================================================
 // MONTAGE DES ROUTES
@@ -70,6 +71,7 @@ router.use('/marketplace', marketplaceRoutes);
 router.use('/cart', cartRoutes);
 router.use('/favorites', favoritesRoutes);
 router.use('/wishlist', wishlistRoutes);
+router.use('/friendships', friendshipsRoutes);
 router.use('/reviews', reviewsRoutes);
 router.use('/payments', paymentsRoutes);
 router.use('/group-purchases', groupPurchasesRoutes);

@@ -41,12 +41,29 @@ export const mockProduits: Produit[] = [
   // AUTRES
   { id: 'prod-019', vendeur_id: 'v-001', nom: 'Bâche de séchage 6×4m', description: 'Bâche tissée pour séchage du cacao.', categorie: 'AUTRES', prix: 12500, devise: 'XOF', unite: 'unité', quantite_disponible: 20, est_actif: true, vendeur_nom: 'Coopérative Bingerville', vendeur_telephone: VENDORS[0].telephone, images: [] },
   { id: 'prod-020', vendeur_id: 'v-002', nom: 'Sac de jute 50 kg', description: 'Sac de jute neuf pour stockage.', categorie: 'AUTRES', prix: 850, devise: 'XOF', unite: 'unité', quantite_disponible: 500, est_actif: true, vendeur_nom: 'AgriSemences CI', vendeur_telephone: VENDORS[1].telephone, images: [] },
+
+  // ── LOCATION DE MATÉRIEL (type_offre = 'location') ──────────────────────
+  { id: 'loc-001', vendeur_id: 'v-001', nom: 'Tracteur Massey Ferguson 35 CV', description: 'Tracteur compact pour labour et transport, idéal pour 2 à 5 ha. Caution 50 000 XOF.', categorie: 'OUTILS', prix: 0, prix_location_jour: 25000, type_offre: 'location', devise: 'XOF', unite: 'jour', quantite_disponible: 1, est_actif: true, vendeur_nom: 'Coopérative Bingerville', vendeur_telephone: VENDORS[0].telephone, images: [] },
+  { id: 'loc-002', vendeur_id: 'v-001', nom: 'Motoculteur 9 CV', description: 'Motoculteur diesel avec fraise et charrue. Livraison incluse dans un rayon de 30 km.', categorie: 'OUTILS', prix: 0, prix_location_jour: 12000, type_offre: 'location', devise: 'XOF', unite: 'jour', quantite_disponible: 2, est_actif: true, vendeur_nom: 'Coopérative Bingerville', vendeur_telephone: VENDORS[0].telephone, images: [] },
+  { id: 'loc-003', vendeur_id: 'v-003', nom: 'Pulvérisateur thermique 25L', description: 'Pulvérisateur à dos motorisé pour grandes parcelles. Usage 1 jour ou +.', categorie: 'OUTILS', prix: 0, prix_location_jour: 4500, type_offre: 'location', devise: 'XOF', unite: 'jour', quantite_disponible: 3, est_actif: true, vendeur_nom: 'Ferme Yao Kouassi', vendeur_telephone: VENDORS[2].telephone, images: [] },
+  { id: 'loc-004', vendeur_id: 'v-005', nom: 'Pompe à eau diesel 4"', description: 'Pompe haute pression pour irrigation, débit 60 m³/h. Carburant non inclus.', categorie: 'OUTILS', prix: 0, prix_location_jour: 8000, type_offre: 'location', devise: 'XOF', unite: 'jour', quantite_disponible: 2, est_actif: true, vendeur_nom: 'Daloa Fruits & Légumes', vendeur_telephone: VENDORS[4].telephone, images: [] },
+  { id: 'loc-005', vendeur_id: 'v-001', nom: 'Égreneuse de maïs manuelle', description: 'Égreneuse mécanique 200 kg/h, parfaite pour petites récoltes.', categorie: 'OUTILS', prix: 0, prix_location_jour: 3500, type_offre: 'location', devise: 'XOF', unite: 'jour', quantite_disponible: 4, est_actif: true, vendeur_nom: 'Coopérative Bingerville', vendeur_telephone: VENDORS[0].telephone, images: [] },
+  { id: 'loc-006', vendeur_id: 'v-003', nom: 'Séchoir solaire pour cacao', description: 'Séchoir mobile en bois et bâche, capacité 100 kg de fèves.', categorie: 'OUTILS', prix: 0, prix_location_jour: 2500, type_offre: 'location', devise: 'XOF', unite: 'jour', quantite_disponible: 3, est_actif: true, vendeur_nom: 'Ferme Yao Kouassi', vendeur_telephone: VENDORS[2].telephone, images: [] },
 ]
 
 export const mockCommandes = [
-  { id: 'cmd-001', produit_id: 'prod-005', produit_nom: 'NPK 15-15-15', quantite: 4, prix_total: 88000, devise: 'XOF', status: 'EN_COURS', vendeur_nom: 'IvoireEngrais SA', created_at: daysAgo(2) },
-  { id: 'cmd-002', produit_id: 'prod-001', produit_nom: 'Semences Maïs IRAT 81', quantite: 50, prix_total: 225000, devise: 'XOF', status: 'LIVREE', vendeur_nom: 'AgriSemences CI', created_at: daysAgo(15) },
-  { id: 'cmd-003', produit_id: 'prod-009', produit_nom: 'Bacillus thuringiensis', quantite: 5, prix_total: 42500, devise: 'XOF', status: 'CONFIRMEE', vendeur_nom: 'Coopérative Bingerville', created_at: daysAgo(5) },
+  { id: 'cmd-001', produit_id: 'prod-005', produit_nom: 'NPK 15-15-15', quantite: 4, prix_total: 88000, devise: 'XOF', status: 'EN_COURS', vendeur_nom: 'IvoireEngrais SA', type_offre: 'vente', created_at: daysAgo(2) },
+  { id: 'cmd-002', produit_id: 'prod-001', produit_nom: 'Semences Maïs IRAT 81', quantite: 50, prix_total: 225000, devise: 'XOF', status: 'LIVREE', vendeur_nom: 'AgriSemences CI', type_offre: 'vente', created_at: daysAgo(15) },
+  { id: 'cmd-003', produit_id: 'prod-009', produit_nom: 'Bacillus thuringiensis', quantite: 5, prix_total: 42500, devise: 'XOF', status: 'CONFIRMEE', vendeur_nom: 'Coopérative Bingerville', type_offre: 'vente', created_at: daysAgo(5) },
+  // Locations en cours / récentes
+  { id: 'cmd-loc-001', produit_id: 'loc-002', produit_nom: 'Motoculteur 9 CV', quantite: 1, jours_location: 3, prix_total: 36000, devise: 'XOF', status: 'EN_COURS', vendeur_nom: 'Coopérative Bingerville', type_offre: 'location', date_debut: daysAgo(0), date_fin: daysAgo(-3), created_at: daysAgo(1) },
+  { id: 'cmd-loc-002', produit_id: 'loc-003', produit_nom: 'Pulvérisateur thermique 25L', quantite: 1, jours_location: 1, prix_total: 4500, devise: 'XOF', status: 'TERMINEE', vendeur_nom: 'Ferme Yao Kouassi', type_offre: 'location', date_debut: daysAgo(8), date_fin: daysAgo(7), created_at: daysAgo(9) },
+]
+
+// Locations spécifiques (équipements)
+export const mockMyRentals = [
+  { id: 'rent-001', equipement_id: 'loc-002', equipement_nom: 'Motoculteur 9 CV', proprietaire_nom: 'Coopérative Bingerville', date_debut: daysAgo(0), date_fin: daysAgo(-3), montant_total: 36000, devise: 'XOF', statut: 'EN_COURS', caution: 30000 },
+  { id: 'rent-002', equipement_id: 'loc-003', equipement_nom: 'Pulvérisateur thermique 25L', proprietaire_nom: 'Ferme Yao Kouassi', date_debut: daysAgo(8), date_fin: daysAgo(7), montant_total: 4500, devise: 'XOF', statut: 'TERMINEE', caution: 0 },
 ]
 
 export const mockFavoris = [

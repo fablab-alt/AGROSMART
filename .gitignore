@@ -151,8 +151,11 @@ influxdb_data/
 test-results/
 playwright-report/
 
-# ============ FICHIERS DE PROGRÈS INTERNES ============
-VISITOR_MODE_PROGRESS.md
+# ============ DOCUMENTATION INTERNE (NE JAMAIS PUSH) ============
+# Seul le README.md à la racine est versionné. Tous les autres .md
+# sont des notes internes (CLAUDE.md, DEPLOY.md, journaux de session, etc.)
+*.md
+!/README.md
 .claude/
 .cursor/
 

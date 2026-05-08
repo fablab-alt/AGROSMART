@@ -183,6 +183,12 @@ api.interceptors.response.use(
   }
 )
 
+// ============ REGIONS (public) ============
+export const regionsApi = {
+  // Liste de toutes les régions de Côte d'Ivoire (utilisée par le formulaire d'inscription)
+  getAll: () => api.get('/regions'),
+}
+
 // ============ AUTH ============
 export const authApi = {
   register: (data: {
@@ -195,6 +201,9 @@ export const authApi = {
     superficie_exploitee?: number
     unite_superficie?: 'ha' | 'm2'
     region_id?: string
+    // Géolocalisation (renseignée si l'utilisateur clique sur "Utiliser ma position")
+    latitude?: number
+    longitude?: number
   }) => api.post('/auth/register', { ...data, prenom: data.prenoms }),
 
   login: (data: { telephone: string; password: string }) =>

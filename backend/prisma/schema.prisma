@@ -193,6 +193,9 @@ model User {
   photoProfil             String?    @map("photo_profil") @db.Text
   dateNaissance           DateTime?  @map("date_naissance") @db.Date
   adresse                 String?    @db.Text
+  // Géolocalisation utilisateur (renseignée via GPS au registration ou plus tard)
+  latitude                Decimal?   @db.Decimal(10, 8)
+  longitude               Decimal?   @db.Decimal(11, 8)
   preferencesNotification Json?      @map("preferences_notification")
   whatsappVerifie         Boolean    @default(false) @map("whatsapp_verifie")
   emailVerifie            Boolean    @default(false) @map("email_verifie")
@@ -261,12 +264,51 @@ model User {
   avis                    Avis[]
   userPoints              UserPoint?
 
+  // Relations système d'amitié (réseau social)
+  friendshipsRequested    Friendship[] @relation("FriendshipRequester")
+  friendshipsReceived     Friendship[] @relation("FriendshipAddressee")
+
+  // Relations forum (likes / upvotes)
+  forumPostLikes          ForumPostLike[]
+  forumReponseUpvotes     ForumReponseUpvote[]
+
   @@index([email])
   @@index([telephone])
   @@index([regionId])
   @@index([role, status])
   @@index([isActive])
   @@map("users")
+}
+
+// ── Système d'amitié (réseau social) ────────────────────────────────────────
+// PENDING  : demande envoyée, en attente
+// ACCEPTED : amis confirmés
+// REJECTED : demande refusée (peut être renvoyée plus tard)
+// BLOCKED  : utilisateur bloqué
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BLOCKED
+}
+
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId String           @map("requester_id")
+  addresseeId String           @map("addressee_id")
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  acceptedAt  DateTime?        @map("accepted_at")
+
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId], name: "unique_friendship")
+  @@index([requesterId])
+  @@index([addresseeId])
+  @@index([status])
+  @@map("friendships")
 }
 
 model PasswordHistory {
@@ -706,7 +748,9 @@ model ForumPost {
   titre     String  @db.VarChar(255)
   contenu   String  @db.Text
   categorie String  @db.VarChar(100)
+  tags      Json?   // Tableau de tags optionnel
   vues      Int     @default(0)
+  likes     Int     @default(0)  // Cache du nombre de likes
   resolu    Boolean @default(false)
 
   // Soft delete
@@ -716,8 +760,9 @@ model ForumPost {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  auteur   User           @relation(fields: [auteurId], references: [id], onDelete: Cascade)
-  reponses ForumReponse[]
+  auteur     User             @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+  reponses   ForumReponse[]
+  postLikes  ForumPostLike[]
 
   @@index([auteurId])
   @@index([categorie])
@@ -732,15 +777,48 @@ model ForumReponse {
   auteurId    String   @map("auteur_id")
   contenu     String   @db.Text
   estSolution Boolean  @default(false) @map("est_solution")
-  upvotes     Int      @default(0)
+  upvotes     Int      @default(0)  // Cache du nombre d'upvotes
+  isActive    Boolean  @default(true) @map("is_active")  // Soft delete
   createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  post   ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  auteur User      @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+  post           ForumPost              @relation(fields: [postId], references: [id], onDelete: Cascade)
+  auteur         User                   @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+  reponseUpvotes ForumReponseUpvote[]
 
   @@index([postId])
   @@index([auteurId])
   @@map("forum_reponses")
+}
+
+// Likes uniques par utilisateur sur un post
+model ForumPostLike {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId], name: "unique_post_like")
+  @@index([userId])
+  @@map("forum_post_likes")
+}
+
+// Upvotes uniques par utilisateur sur une réponse
+model ForumReponseUpvote {
+  id        String   @id @default(uuid())
+  reponseId String   @map("reponse_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  reponse ForumReponse @relation(fields: [reponseId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reponseId, userId], name: "unique_reponse_upvote")
+  @@index([userId])
+  @@map("forum_reponse_upvotes")
 }
 
 model Message {

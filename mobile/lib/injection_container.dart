@@ -123,6 +123,12 @@ import 'features/forum/presentation/bloc/forum_bloc.dart';
 import 'features/forum/domain/repositories/forum_repository.dart';
 import 'features/forum/data/repositories/forum_repository_impl.dart';
 
+// Friendships (réseau social) imports
+import 'features/friendships/presentation/bloc/friendships_bloc.dart';
+import 'features/friendships/domain/repositories/friendships_repository.dart';
+import 'features/friendships/data/repositories/friendships_repository_impl.dart';
+import 'features/friendships/data/datasources/friendships_remote_datasource.dart';
+
 // Recommandation imports
 import 'features/recommandations/data/datasources/recommandation_remote_data_source.dart';
 
@@ -293,6 +299,15 @@ Future<void> init() async {
 
   // Forum
   sl.registerFactory(() => ForumBloc(repository: sl()));
+
+  // ── Friendships (réseau social) ─────────────────────────────────────────
+  sl.registerLazySingleton<FriendshipsRemoteDataSource>(
+    () => FriendshipsRemoteDataSourceImpl(dio: sl<ApiClient>().dio),
+  );
+  sl.registerLazySingleton<FriendshipsRepository>(
+    () => FriendshipsRepositoryImpl(remote: sl()),
+  );
+  sl.registerFactory(() => FriendshipsBloc(repository: sl()));
   sl.registerLazySingleton<ForumRepository>(() => ForumRepositoryImpl());
 
   // Community Marketplace

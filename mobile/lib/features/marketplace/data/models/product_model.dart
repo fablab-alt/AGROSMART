@@ -15,7 +15,25 @@ class ProductModel extends Product {
     super.vendeurNom,
     super.vendeurTelephone,
     required super.createdAt,
+    super.typeOffre,
+    super.prixLocationJour,
+    super.dureeMinLocation,
+    super.caution,
+    super.etat,
   });
+
+  static double? _toDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString());
+  }
+
+  static int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
     final createdAtValue = json['created_at'] ?? json['createdAt'];
@@ -24,17 +42,10 @@ class ProductModel extends Product {
       nom: json['nom'],
       description: json['description'],
       categorie: json['categorie'],
-      prix: (json['prix'] is num)
-          ? (json['prix'] as num).toDouble()
-          : double.tryParse(json['prix'].toString()) ?? 0.0,
+      prix: _toDouble(json['prix']) ?? 0.0,
       unite: json['unite'],
       quantiteDisponible:
-          ((json['quantite_disponible'] ?? json['stock']) is num)
-          ? (json['quantite_disponible'] ?? json['stock'] as num).toDouble()
-          : double.tryParse(
-                  (json['quantite_disponible'] ?? json['stock']).toString(),
-                ) ??
-                0.0,
+          _toDouble(json['quantite_disponible'] ?? json['stock']) ?? 0.0,
       localisation: json['localisation'] ?? json['adresse'],
       images: json['images'] != null ? List<String>.from(json['images']) : [],
       vendeurId: json['vendeur_id'] ?? json['vendeurId'],
@@ -43,6 +54,11 @@ class ProductModel extends Product {
       createdAt: createdAtValue != null
           ? DateTime.parse(createdAtValue.toString())
           : DateTime.now(),
+      typeOffre: (json['type_offre'] ?? json['typeOffre'] ?? 'vente').toString(),
+      prixLocationJour: _toDouble(json['prix_location_jour'] ?? json['prixLocationJour']),
+      dureeMinLocation: _toInt(json['duree_min_location'] ?? json['dureeMinLocation']),
+      caution: _toDouble(json['caution']),
+      etat: json['etat']?.toString(),
     );
   }
 
@@ -61,6 +77,11 @@ class ProductModel extends Product {
       'vendeur_nom': vendeurNom,
       'vendeur_telephone': vendeurTelephone,
       'created_at': createdAt.toIso8601String(),
+      'type_offre': typeOffre,
+      if (prixLocationJour != null) 'prix_location_jour': prixLocationJour,
+      if (dureeMinLocation != null) 'duree_min_location': dureeMinLocation,
+      if (caution != null) 'caution': caution,
+      if (etat != null) 'etat': etat,
     };
   }
 }

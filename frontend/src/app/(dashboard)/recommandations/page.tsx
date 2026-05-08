@@ -131,31 +131,74 @@ export default function RecommandationsPage() {
   const [feedbackCommentaire, setFeedbackCommentaire] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Normalisation : le backend renvoie `type` lowercase ou MAJUSCULES, `priorite` en int (1-5),
+  // `statut` en MAJUSCULES (ACTIVE/APPLIQUEE) ou via `appliquee` boolean.
+  // Le mock visiteur renvoie aussi des valeurs MAJUSCULES (IRRIGATION, FERTILISATION...).
+  const normalizeCategorie = (raw: any): Recommendation['categorie'] => {
+    const v = String(raw || '').toLowerCase();
+    if (['irrigation', 'fertilisation', 'protection', 'recolte', 'entretien'].includes(v)) {
+      return v as Recommendation['categorie'];
+    }
+    if (v === 'récolte') return 'recolte';
+    if (['traitement', 'pesticide', 'maladie'].includes(v)) return 'protection';
+    if (['plantation', 'semis', 'maintenance'].includes(v)) return 'entretien';
+    return 'entretien';
+  };
+
+  const normalizePriorite = (raw: any): Recommendation['priorite'] => {
+    if (typeof raw === 'number') {
+      if (raw >= 4) return 'haute';
+      if (raw === 3) return 'moyenne';
+      return 'basse';
+    }
+    const v = String(raw || '').toLowerCase();
+    if (['haute', 'high', 'urgente', 'critique', '1'].includes(v)) return 'haute';
+    if (['basse', 'low', 'faible', '3'].includes(v)) return 'basse';
+    return 'moyenne';
+  };
+
+  const normalizeStatut = (r: any): Recommendation['statut'] => {
+    if (r.appliquee === true) return 'terminee';
+    const v = String(r.statut || '').toLowerCase();
+    if (['appliquee', 'applique', 'terminee', 'termine', 'done'].includes(v)) return 'terminee';
+    if (['en_cours', 'en cours', 'in_progress'].includes(v)) return 'en_cours';
+    if (['ignoree', 'ignore', 'rejected'].includes(v)) return 'ignoree';
+    return 'en_attente';
+  };
+
   const fetchRecommandations = async () => {
     setLoading(true);
     try {
       const res = await api.get('/recommandations');
       if (res.data.success) {
-        // Map backend data to frontend model
-        const mappedData = res.data.data.map((r: any) => ({
+        const list = Array.isArray(res.data.data)
+          ? res.data.data
+          : (res.data.data?.items || []);
+        const mappedData: Recommendation[] = list.map((r: any) => ({
           id: r.id,
           titre: r.titre,
-          description: r.contenu,
-          categorie: r.type || 'entretien', // Map type to categorie if needed
-          priorite: r.priorite,
-          statut: r.statut,
+          description: r.description || r.contenu || '',
+          categorie: normalizeCategorie(r.type || r.categorie),
+          priorite: normalizePriorite(r.priorite),
+          statut: normalizeStatut(r),
           parcelle: {
-            id: r.parcelle_id,
-            nom: r.parcelle_nom || 'Parcelle inconnue',
-            culture: r.culture_nom || 'Culture inconnue'
+            id: r.parcelle_id || r.parcelleId || '',
+            nom: r.parcelle?.nom || r.parcelle_nom || 'Parcelle inconnue',
+            culture: r.parcelle?.culture || r.culture_nom || 'Culture inconnue',
           },
-          date_creation: r.created_at,
-          date_echeance: r.date_fin,
-          impact_estime: r.impact_estime || 'Non défini', // Backup if backend uses different field name
-          source_ia: r.source || 'IA',
-          confiance: r.confiance || 85,
-          actions: r.actions || [],
-          feedback: r.feedback ? JSON.parse(r.feedback) : null // Assuming feedback stored as JSON string or jsonb
+          date_creation: r.created_at || r.createdAt || new Date().toISOString(),
+          date_echeance: r.date_fin || r.dateFin,
+          impact_estime: r.impact_estime || r.impact || 'Non défini',
+          source_ia: r.source || r.generePar || 'IA',
+          confiance: typeof r.confiance === 'number' ? r.confiance : 85,
+          actions: Array.isArray(r.actions) ? r.actions : (r.action ? [r.action] : []),
+          feedback: (() => {
+            if (!r.feedback) return null;
+            if (typeof r.feedback === 'string') {
+              try { return JSON.parse(r.feedback); } catch { return null; }
+            }
+            return r.feedback;
+          })(),
         }));
         setRecommandations(mappedData);
       }
@@ -450,7 +493,8 @@ export default function RecommandationsPage() {
             </Card>
           ) : (
             recommandationsFiltrees.map((rec) => {
-              const Icon = categorieIcons[rec.categorie];
+              // Fallback si la catégorie ne match pas (sécurité contre React #130)
+              const Icon = categorieIcons[rec.categorie] ?? ThermometerSun;
               const isSelected = selectedRecommandation?.id === rec.id;
 
               return (
@@ -514,7 +558,7 @@ export default function RecommandationsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     {(() => {
-                      const Icon = categorieIcons[selectedRecommandation.categorie];
+                      const Icon = categorieIcons[selectedRecommandation.categorie] ?? ThermometerSun;
                       return (
                         <div className={cn('p-3 rounded-lg border', categorieColors[selectedRecommandation.categorie])}>
                           <Icon className="h-6 w-6" />

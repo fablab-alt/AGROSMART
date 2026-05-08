@@ -76,21 +76,27 @@ class _AddProductPageState extends State<AddProductPage> {
         return;
       }
 
-      final data = {
+      // Le backend supporte type_offre/prix_location_jour/caution sur MarketplaceProduit
+      final data = <String, dynamic>{
         'nom': _nomController.text,
-        'description':
-            _descController.text +
-            (_isLocation
-                ? ' [LOCATION]'
-                : ''), // Hack to distinguish for now until backend supports proper type
+        'description': _descController.text,
         'categorie': _selectedCategory,
         'prix': double.tryParse(_prixController.text) ?? 0,
         'unite': _selectedUnit,
         'quantite_disponible': double.tryParse(_qtyController.text) ?? 1,
         'localisation': _locController.text,
-        // Add more metadata to description or separate fields if backend supports it
-        // 'type_offre': _isLocation ? 'location' : 'vente',
+        'type_offre': _isLocation ? 'location' : 'vente',
       };
+
+      if (_isLocation) {
+        // Pour une location, le prix journalier prime
+        final prixJour = double.tryParse(_prixController.text) ?? 0;
+        data['prix_location_jour'] = prixJour;
+        final caution = double.tryParse(_cautionController.text);
+        if (caution != null && caution > 0) {
+          data['caution'] = caution;
+        }
+      }
 
       context.read<MarketplaceBloc>().add(
         AddMarketplaceProduct(data: data, images: _selectedImages),

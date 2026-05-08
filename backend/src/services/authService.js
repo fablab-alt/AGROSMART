@@ -20,11 +20,22 @@ class AuthService {
      * Inscription d'un nouvel utilisateur
      */
     async registerUser(userData) {
-        const { email, telephone, password, nom, prenoms, prenom, langue_preferee = 'fr', adresse,
+        let { email, telephone, password, nom, prenoms, prenom, langue_preferee = 'fr', adresse,
+            latitude, longitude,  // GPS optionnel à l'inscription
+            regionId, region_id,
             role = 'PRODUCTEUR', // Nouveau: rôle par défaut PRODUCTEUR pour compatibilité
             type_producteur,
             production_3_mois_precedents_kg, superficie_exploitee, unite_superficie, systeme_irrigation,
             production_mois1_kg, production_mois2_kg, production_mois3_kg } = userData;
+
+        // Trim défensif : évite que des espaces invisibles dans email/telephone/password
+        // (issus de l'auto-fill iOS ou copy-paste) cassent ensuite le login.
+        email = email ? String(email).trim().toLowerCase() : email;
+        telephone = telephone ? String(telephone).trim() : telephone;
+        password = String(password || '');
+        nom = nom ? String(nom).trim() : nom;
+        prenoms = prenoms ? String(prenoms).trim() : prenoms;
+        prenom = prenom ? String(prenom).trim() : prenom;
 
         logger.info('Registration attempt', { telephone, email: email || 'none', role });
 
@@ -63,6 +74,14 @@ class AuthService {
         // TODO: Remettre EN_ATTENTE une fois que la vérification OTP/Email sera activée
         const initialStatus = 'ACTIF';
 
+        // Validation lat/lon (Côte d'Ivoire approx : lat 4.5-10.5, lon -8.5 à -2.5)
+        const validLat = (latitude !== undefined && latitude !== null && !isNaN(parseFloat(latitude)))
+            ? parseFloat(latitude) : null;
+        const validLon = (longitude !== undefined && longitude !== null && !isNaN(parseFloat(longitude)))
+            ? parseFloat(longitude) : null;
+        // Region : accepte regionId ou region_id (frontend envoie en snake_case)
+        const finalRegionId = regionId || region_id || null;
+
         // Insertion - Les champs agricoles ne sont pertinents que pour les producteurs
         const user = await prisma.user.create({
             data: {
@@ -75,6 +94,9 @@ class AuthService {
                 langue_preferee: langue_preferee,
                 status: initialStatus,
                 role: userRole, // Utiliser le rôle validé
+                ...(validLat !== null && { latitude: validLat }),
+                ...(validLon !== null && { longitude: validLon }),
+                ...(finalRegionId && { regionId: finalRegionId }),
                 // Champs profil agricole optionnels (uniquement pour les producteurs)
                 ...(userRole === 'PRODUCTEUR' && type_producteur && { typeProducteur: type_producteur }),
                 ...(userRole === 'PRODUCTEUR' && production_3_mois_precedents_kg && !isNaN(parseFloat(production_3_mois_precedents_kg)) && { production3MoisPrecedentsKg: parseFloat(production_3_mois_precedents_kg) }),
@@ -164,7 +186,14 @@ class AuthService {
      * Connexion utilisateur
      */
     async loginUser(credentials) {
-        const { login, password } = credentials;
+        let { login, password } = credentials;
+        // Trim défensif : les espaces invisibles (auto-fill iOS, copy-paste) sont une cause
+        // fréquente de "Identifiants incorrects" alors que le user a tout bien tapé.
+        login = String(login || '').trim();
+        password = String(password || '');
+
+        // Normalisation email : insensible à la casse
+        const emailLower = login.includes('@') ? login.toLowerCase() : null;
 
         // Normaliser le numéro de téléphone si c'est un numéro
         // Accepte: 0701000001, +2250701000001, 2250701000001
@@ -175,6 +204,7 @@ class AuthService {
             where: {
                 OR: [
                     { email: login },
+                    ...(emailLower ? [{ email: emailLower }] : []),
                     { telephone: login },
                     // Recherche avec toutes les variantes du numéro
                     ...phoneVariants.map(variant => ({ telephone: variant }))

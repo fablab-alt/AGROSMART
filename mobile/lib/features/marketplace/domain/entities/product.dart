@@ -14,6 +14,12 @@ class Product extends Equatable {
   final String? vendeurNom;
   final String? vendeurTelephone;
   final DateTime createdAt;
+  // Location de matériel
+  final String typeOffre;          // 'vente' (default) | 'location'
+  final double? prixLocationJour;  // prix par jour si location
+  final int? dureeMinLocation;     // durée minimale en jours
+  final double? caution;           // caution exigée
+  final String? etat;              // 'neuf', 'bon', 'moyen', 'usé'
 
   const Product({
     required this.id,
@@ -29,7 +35,15 @@ class Product extends Equatable {
     this.vendeurNom,
     this.vendeurTelephone,
     required this.createdAt,
+    this.typeOffre = 'vente',
+    this.prixLocationJour,
+    this.dureeMinLocation,
+    this.caution,
+    this.etat,
   });
+
+  bool get estLocation => typeOffre == 'location';
+  double get prixAffiche => estLocation ? (prixLocationJour ?? prix) : prix;
 
   @override
   List<Object?> get props => [
@@ -44,5 +58,10 @@ class Product extends Equatable {
         images,
         vendeurId,
         createdAt,
+        typeOffre,
+        prixLocationJour,
+        dureeMinLocation,
+        caution,
+        etat,
       ];
 }

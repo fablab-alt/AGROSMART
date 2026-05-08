@@ -53,6 +53,12 @@ import '../../features/community/presentation/pages/community_marketplace_page.d
 import '../../features/community/presentation/pages/create_listing_page.dart';
 import '../../features/assistant/presentation/pages/agri_chatbot_page.dart';
 
+// Friendships (réseau social)
+import '../../features/friendships/presentation/pages/friendships_page.dart';
+import '../../features/friendships/presentation/bloc/friendships_bloc.dart';
+import 'package:flutter_bloc/flutter_bloc.dart' as fbloc;
+import '../../injection_container.dart' as di;
+
 // Additional
 import '../../features/irrigation/presentation/pages/irrigation_page.dart';
 import '../../features/support/presentation/pages/support_page.dart';
@@ -222,6 +228,14 @@ class AppRouter {
       GoRoute(
         path: '/community',
         builder: (context, state) => const CommunityPage(),
+      ),
+      GoRoute(
+        path: '/friends',
+        name: 'friends',
+        builder: (context, state) => fbloc.BlocProvider(
+          create: (_) => di.sl<FriendshipsBloc>(),
+          child: const FriendshipsPage(),
+        ),
       ),
       GoRoute(
         path: '/community-marketplace',

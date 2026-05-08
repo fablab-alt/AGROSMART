@@ -23,6 +23,7 @@ import {
   Lightbulb,
   TrendingUp,
   Users,
+  UserPlus,
   Package,
   CalendarDays,
   BookOpen,
@@ -44,6 +45,7 @@ const navigation = [
   { name: 'Calendrier', href: '/calendrier', icon: CalendarDays },
   { name: 'Fiches Pratiques', href: '/fiches-pratiques', icon: BookOpen },
   { name: 'Communauté', href: '/communaute', icon: Users },
+  { name: 'Réseau & Amis', href: '/amis', icon: UserPlus },
   { name: 'Messages', href: '/messages', icon: MessageSquare },
 ]
 

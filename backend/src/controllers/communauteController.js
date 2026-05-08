@@ -15,51 +15,47 @@ exports.getPosts = async (req, res, next) => {
         const offset = (page - 1) * limit;
         const { categorie, tag, search, sort } = req.query;
 
-        // Build where clause
-        const where = {};
+        // Build where clause (exclut les soft-deleted)
+        const where = { isActive: true };
         if (categorie) where.categorie = categorie;
-        if (tag) where.tags = { has: tag }; // Prisma 'has' for arrays? Check schema. If array, uses has.
         if (search) {
             where.OR = [
-                { titre: { contains: search, mode: 'insensitive' } },
-                { contenu: { contains: search, mode: 'insensitive' } }
+                { titre: { contains: search } },
+                { contenu: { contains: search } }
             ];
         }
 
         // Build orderBy
         let orderBy = { createdAt: 'desc' };
         if (sort === 'vues') orderBy = { vues: 'desc' };
-        // if (sort === 'reponses') ... Prisma can't sort by relations count directly easily.
-        // We might need to use basic sorting or client side, or raw query for complex sorts if crucial.
-        // For now, default to createdAt or vues.
+        else if (sort === 'likes') orderBy = { likes: 'desc' };
+
+        const userId = req.user?.id;
 
         const posts = await prisma.forumPost.findMany({
             where,
             include: {
-                auteur: {
-                    select: { nom: true, prenoms: true }
-                },
-                _count: {
-                    select: { reponses: true }
-                }
+                auteur: { select: { nom: true, prenoms: true, photoProfil: true } },
+                _count: { select: { reponses: true, postLikes: true } },
+                ...(userId && { postLikes: { where: { userId }, select: { id: true } } })
             },
             take: limit,
             skip: offset,
             orderBy
         });
 
-        // Map stats
-        const data = posts.map(p => ({
+        const data = posts.map((p) => ({
             ...p,
             auteur_nom: p.auteur.nom,
             auteur_prenom: p.auteur.prenoms,
-            reponses_count: p._count.reponses
+            auteur_photo: p.auteur.photoProfil,
+            reponses_count: p._count.reponses,
+            likes: p.likes || p._count.postLikes,
+            isLikedByMe: !!(p.postLikes && p.postLikes.length > 0),
+            postLikes: undefined  // ne pas leaker
         }));
 
-        res.json({
-            success: true,
-            data
-        });
+        res.json({ success: true, data });
     } catch (error) {
         next(error);
     }
@@ -93,7 +89,15 @@ exports.getPostById = async (req, res, next) => {
     try {
         const { id } = req.params;
 
-        // Incrémenter les vues (atomic update)
+        const userId = req.user?.id;
+
+        // Vérifier que le post est actif
+        const exists = await prisma.forumPost.findFirst({
+            where: { id, isActive: true }
+        });
+        if (!exists) throw errors.notFound('Post non trouvé');
+
+        // Incrémenter les vues
         await prisma.forumPost.update({
             where: { id },
             data: { vues: { increment: 1 } }
@@ -102,31 +106,29 @@ exports.getPostById = async (req, res, next) => {
         const post = await prisma.forumPost.findUnique({
             where: { id },
             include: {
-                auteur: {
-                    select: { nom: true, prenoms: true }
-                },
+                auteur: { select: { nom: true, prenoms: true, photoProfil: true } },
                 reponses: {
+                    where: { isActive: true },
                     include: {
-                        auteur: {
-                            select: { nom: true, prenoms: true }
-                        }
+                        auteur: { select: { nom: true, prenoms: true, photoProfil: true } },
+                        ...(userId && { reponseUpvotes: { where: { userId }, select: { id: true } } })
                     },
                     orderBy: [
                         { estSolution: 'desc' },
                         { createdAt: 'asc' }
                     ]
-                }
+                },
+                ...(userId && { postLikes: { where: { userId }, select: { id: true } } })
             }
         });
 
-        if (!post) {
-            throw errors.notFound('Post non trouvé');
-        }
-
-        const reponsesFormatted = post.reponses.map(r => ({
+        const reponsesFormatted = post.reponses.map((r) => ({
             ...r,
             auteur_nom: r.auteur.nom,
-            auteur_prenom: r.auteur.prenoms
+            auteur_prenom: r.auteur.prenoms,
+            auteur_photo: r.auteur.photoProfil,
+            isUpvotedByMe: !!(r.reponseUpvotes && r.reponseUpvotes.length > 0),
+            reponseUpvotes: undefined
         }));
 
         res.json({
@@ -135,7 +137,10 @@ exports.getPostById = async (req, res, next) => {
                 ...post,
                 auteur_nom: post.auteur.nom,
                 auteur_prenom: post.auteur.prenoms,
-                reponses: reponsesFormatted
+                auteur_photo: post.auteur.photoProfil,
+                reponses: reponsesFormatted,
+                isLikedByMe: !!(post.postLikes && post.postLikes.length > 0),
+                postLikes: undefined
             }
         });
     } catch (error) {
@@ -228,6 +233,218 @@ exports.getStats = async (req, res, next) => {
                 membres
             }
         });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/* ========== EDIT POST (auteur ou admin) ========== */
+exports.updatePost = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { titre, contenu, categorie, tags } = req.body;
+
+        const post = await prisma.forumPost.findUnique({ where: { id } });
+        if (!post) throw errors.notFound('Post non trouvé');
+
+        if (post.auteurId !== req.user.id && req.user.role !== ROLES.ADMIN) {
+            throw errors.forbidden('Vous ne pouvez pas modifier ce post');
+        }
+
+        const updated = await prisma.forumPost.update({
+            where: { id },
+            data: {
+                ...(titre && { titre }),
+                ...(contenu && { contenu }),
+                ...(categorie && { categorie }),
+                ...(tags !== undefined && { tags })
+            }
+        });
+
+        res.json({ success: true, message: 'Post modifié', data: updated });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/* ========== DELETE POST (soft delete, auteur ou admin) ========== */
+exports.deletePost = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        const post = await prisma.forumPost.findUnique({ where: { id } });
+        if (!post) throw errors.notFound('Post non trouvé');
+
+        if (post.auteurId !== req.user.id && req.user.role !== ROLES.ADMIN) {
+            throw errors.forbidden('Vous ne pouvez pas supprimer ce post');
+        }
+
+        await prisma.forumPost.update({
+            where: { id },
+            data: { isActive: false, deletedAt: new Date() }
+        });
+
+        res.json({ success: true, message: 'Post supprimé' });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/* ========== EDIT RÉPONSE (auteur ou admin) ========== */
+exports.updateReponse = async (req, res, next) => {
+    try {
+        const { reponseId } = req.params;
+        const { contenu } = req.body;
+
+        const reponse = await prisma.forumReponse.findUnique({ where: { id: reponseId } });
+        if (!reponse) throw errors.notFound('Réponse non trouvée');
+
+        if (reponse.auteurId !== req.user.id && req.user.role !== ROLES.ADMIN) {
+            throw errors.forbidden('Vous ne pouvez pas modifier cette réponse');
+        }
+
+        const updated = await prisma.forumReponse.update({
+            where: { id: reponseId },
+            data: { contenu }
+        });
+
+        res.json({ success: true, message: 'Réponse modifiée', data: updated });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/* ========== DELETE RÉPONSE (soft delete) ========== */
+exports.deleteReponse = async (req, res, next) => {
+    try {
+        const { reponseId } = req.params;
+
+        const reponse = await prisma.forumReponse.findUnique({ where: { id: reponseId } });
+        if (!reponse) throw errors.notFound('Réponse non trouvée');
+
+        if (reponse.auteurId !== req.user.id && req.user.role !== ROLES.ADMIN) {
+            throw errors.forbidden('Vous ne pouvez pas supprimer cette réponse');
+        }
+
+        await prisma.forumReponse.update({
+            where: { id: reponseId },
+            data: { isActive: false }
+        });
+
+        res.json({ success: true, message: 'Réponse supprimée' });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/* ========== TOGGLE LIKE POST ========== */
+exports.toggleLikePost = async (req, res, next) => {
+    try {
+        const { id: postId } = req.params;
+        const userId = req.user.id;
+
+        const post = await prisma.forumPost.findUnique({ where: { id: postId } });
+        if (!post) throw errors.notFound('Post non trouvé');
+
+        const existing = await prisma.forumPostLike.findUnique({
+            where: { unique_post_like: { postId, userId } }
+        });
+
+        if (existing) {
+            // Unlike : supprimer + décrémenter
+            await prisma.$transaction([
+                prisma.forumPostLike.delete({ where: { id: existing.id } }),
+                prisma.forumPost.update({
+                    where: { id: postId },
+                    data: { likes: { decrement: 1 } }
+                })
+            ]);
+            res.json({ success: true, data: { liked: false, likes: Math.max(0, post.likes - 1) } });
+        } else {
+            // Like : créer + incrémenter
+            await prisma.$transaction([
+                prisma.forumPostLike.create({ data: { postId, userId } }),
+                prisma.forumPost.update({
+                    where: { id: postId },
+                    data: { likes: { increment: 1 } }
+                })
+            ]);
+            res.json({ success: true, data: { liked: true, likes: post.likes + 1 } });
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
+/* ========== TOGGLE UPVOTE RÉPONSE ========== */
+exports.toggleUpvoteReponse = async (req, res, next) => {
+    try {
+        const { reponseId } = req.params;
+        const userId = req.user.id;
+
+        const reponse = await prisma.forumReponse.findUnique({ where: { id: reponseId } });
+        if (!reponse) throw errors.notFound('Réponse non trouvée');
+
+        const existing = await prisma.forumReponseUpvote.findUnique({
+            where: { unique_reponse_upvote: { reponseId, userId } }
+        });
+
+        if (existing) {
+            await prisma.$transaction([
+                prisma.forumReponseUpvote.delete({ where: { id: existing.id } }),
+                prisma.forumReponse.update({
+                    where: { id: reponseId },
+                    data: { upvotes: { decrement: 1 } }
+                })
+            ]);
+            res.json({ success: true, data: { upvoted: false, upvotes: Math.max(0, reponse.upvotes - 1) } });
+        } else {
+            await prisma.$transaction([
+                prisma.forumReponseUpvote.create({ data: { reponseId, userId } }),
+                prisma.forumReponse.update({
+                    where: { id: reponseId },
+                    data: { upvotes: { increment: 1 } }
+                })
+            ]);
+            res.json({ success: true, data: { upvoted: true, upvotes: reponse.upvotes + 1 } });
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
+/* ========== CATÉGORIES ========== */
+exports.getCategories = async (req, res, next) => {
+    try {
+        // Liste statique + comptage dynamique
+        const baseCategories = [
+            'Cacao', 'Maïs', 'Riz', 'Hévéa', 'Banane', 'Tomate', 'Manioc',
+            'Maladies', 'Irrigation', 'Bio', 'Marketplace',
+            'Coopération', 'Maraîchage', 'Témoignages', 'Annonces', 'Général'
+        ];
+
+        // Comptage par catégorie via groupBy
+        const counts = await prisma.forumPost.groupBy({
+            by: ['categorie'],
+            where: { isActive: true },
+            _count: { categorie: true }
+        });
+
+        const countMap = Object.fromEntries(counts.map((c) => [c.categorie, c._count.categorie]));
+
+        const categories = baseCategories.map((nom) => ({
+            nom,
+            count: countMap[nom] || 0
+        }));
+
+        // Ajouter les catégories dynamiques (créées par les users) qui ne sont pas dans la liste statique
+        Object.keys(countMap).forEach((nom) => {
+            if (!baseCategories.includes(nom)) {
+                categories.push({ nom, count: countMap[nom] });
+            }
+        });
+
+        res.json({ success: true, data: categories });
     } catch (error) {
         next(error);
     }

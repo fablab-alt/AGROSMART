@@ -97,6 +97,9 @@ export interface Produit {
   est_actif: boolean
   vendeur_nom?: string
   vendeur_telephone?: string
+  // Location de matériel : type_offre = 'location' + prix_location_jour
+  type_offre?: 'vente' | 'location'
+  prix_location_jour?: number
 }
 
 export interface Formation {
