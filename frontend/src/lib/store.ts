@@ -37,7 +37,7 @@ export interface Capteur {
   id: string
   station_id: string
   code: string
-  type: 'humidite' | 'temperature' | 'ph' | 'npk' | 'meteo' | 'camera'
+  type: 'humidite_sol' | 'humidite_temperature_ambiante' | 'uv' | 'npk' | 'direction_vent' | 'transpiration_plante' | string
   modele?: string
   fabricant?: string
   unite_mesure?: string

@@ -15,6 +15,7 @@ import {
   Calendar,
   Sunrise,
   Sunset,
+  Zap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,6 +32,8 @@ interface MeteoData {
   pressure: number
   windSpeed: number
   windDirection: string
+  rainLevel: number      // rain_level (0-100) capteur voisilab
+  luminosite: number     // luminosity (lux) capteur voisilab
   description: string
   icon: string
   visibility: number
@@ -113,6 +116,8 @@ export default function MeteoPage() {
           pressure: current.pressure ?? 1013,
           windSpeed: current.wind_speed,
           windDirection: current.wind_direction ?? 'N/A',
+          rainLevel: current.rain_level ?? 0,
+          luminosite: Math.round(current.luminosity ?? 0),
           description: wmo.label,
           icon: wmo.icon,
           visibility: 10,
@@ -300,7 +305,7 @@ export default function MeteoPage() {
       </div>
 
       {/* Weather Details */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
@@ -346,6 +351,32 @@ export default function MeteoPage() {
             <div>
               <p className="text-sm text-gray-500">Visibilité</p>
               <p className="text-xl font-bold">{meteo.visibility} km</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center">
+              <CloudRain className="h-6 w-6 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Précipitations</p>
+              <p className="text-xl font-bold">{meteo.rainLevel}</p>
+              <p className="text-xs text-gray-400">niveau (0-100)</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
+              <Zap className="h-6 w-6 text-yellow-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Luminosité</p>
+              <p className="text-xl font-bold">{meteo.luminosite.toLocaleString()}</p>
+              <p className="text-xs text-gray-400">lux</p>
             </div>
           </CardContent>
         </Card>
