@@ -202,7 +202,7 @@ export default function CapteursPage() {
   const filteredCapteurs = capteurs.filter(capteur => {
     const matchesSearch = (capteur.nom?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
       (capteur.parcelleNom?.toLowerCase() || '').includes(searchQuery.toLowerCase())
-    const matchesType = filterType === 'all' || capteur.type === filterType
+    const matchesType = filterType === 'all' || (capteur.type?.toLowerCase()) === filterType
     const matchesStatus = filterStatus === 'all' || capteur.statut?.toLowerCase() === filterStatus
     return matchesSearch && matchesType && matchesStatus
   })
@@ -371,7 +371,7 @@ export default function CapteursPage() {
                       capteur.statut?.toLowerCase() === 'erreur' ? 'bg-red-100 text-red-600' :
                         'bg-gray-100 text-gray-600'
                       }`}>
-                      {getTypeIcon(capteur.type)}
+                      {getTypeIcon(capteur.type?.toLowerCase())}
                     </div>
                     <div>
                       <CardTitle className="text-base">{capteur.nom}</CardTitle>
@@ -413,7 +413,7 @@ export default function CapteursPage() {
                 <div className={`p-4 rounded-lg ${isValueAlert(capteur) ? 'bg-red-100' : 'bg-gray-50'
                   }`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">{getTypeLabel(capteur.type)}</span>
+                    <span className="text-sm text-gray-600">{getTypeLabel(capteur.type?.toLowerCase())}</span>
                     {isValueAlert(capteur) && (
                       <AlertTriangle className="h-4 w-4 text-red-500" />
                     )}

@@ -198,10 +198,17 @@ const validators = {
     .isIn(['producteur', 'conseiller', 'admin', 'partenaire'])
     .withMessage('Rôle invalide'),
 
-  // Type de capteur (conforme au schéma PostgreSQL)
+  // Type de capteur (conforme à l'enum Prisma CapteurType)
   typeCapteur: () => body('type')
-    .isIn(['humidite', 'temperature', 'ph', 'npk', 'meteo', 'camera'])
-    .withMessage('Type de capteur invalide'),
+    .isIn([
+      'HUMIDITE_TEMPERATURE_AMBIANTE',
+      'HUMIDITE_SOL',
+      'UV',
+      'NPK',
+      'DIRECTION_VENT',
+      'TRANSPIRATION_PLANTE'
+    ])
+    .withMessage('Type de capteur invalide. Valeurs acceptées : HUMIDITE_TEMPERATURE_AMBIANTE, HUMIDITE_SOL, UV, NPK, DIRECTION_VENT, TRANSPIRATION_PLANTE'),
 
   // Niveau d'alerte (conforme au schéma PostgreSQL)
   niveauAlerte: () => body('niveau')
