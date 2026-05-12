@@ -83,30 +83,33 @@ function handleMutation(method: string, body?: unknown): Record<string, unknown>
 }
 
 // ── Weather mock shapes (matching what meteo/page.tsx and dashboard expect) ───
+// Mock aligné sur le format retourné par le controller voisilab
 const weatherCurrent = {
-  weather_code: 2,          // WMO: partly cloudy
-  temperature: 28.5,
-  temperature_max: 32,
-  temperature_min: 23,
+  weather_code: 2,
+  temperature: 28.5,        // pas arrondi → cohérence avec l'onglet météo
   humidity: 72,
+  pressure: 1008,
   wind_speed: 12,
-  wind_direction: 225,
-  uv_index: 7,
-  precipitation: 0,
-  feels_like: 31,
-  location: 'Abidjan, CI',
-  observed_at: new Date().toISOString(),
+  wind_direction: 'N/A',
+  rain_level: 35,           // précipitations capteur voisilab (0-100)
+  luminosity: 12808,        // lux capteur voisilab
+  condition: 'Partiellement nuageux',
+  station: 'Station Alpha',
+  location: 'Site Nord',
+  anomalie: { score: 0.25, detectee: false },
 }
 
 const weatherForecast = {
-  daily: Array.from({ length: 7 }, (_, i) => ({
-    date: new Date(Date.now() + i * 86400000).toISOString().split('T')[0],
-    weather_code: [0, 2, 3, 61, 2, 0, 1][i],
-    temp_min: Math.round(22 + Math.random() * 3),
-    temp_max: Math.round(29 + Math.random() * 5),
-    precipitation_probability: [5, 10, 30, 80, 20, 5, 10][i],
-    precipitation_sum: [0, 0, 2, 15, 1, 0, 0][i],
-    wind_speed_max: Math.round(10 + Math.random() * 8),
+  daily: Array.from({ length: 4 }, (_, i) => ({
+    date: new Date(Date.now() + [3, 6, 12, 24][i] * 3600000).toISOString().split('T')[0],
+    horizon_heures: [3, 6, 12, 24][i],
+    weather_code: [2, 3, 61, 2][i],
+    description: ['Partiellement nuageux', 'Couvert', 'Pluie faible', 'Partiellement nuageux'][i],
+    temp_min: Math.round(24 + Math.random() * 2),
+    temp_max: Math.round(30 + Math.random() * 3),
+    precipitation_probability: [10, 25, 65, 15][i],
+    humidity: Math.round(60 + Math.random() * 15),
+    etp: [3.2, 3.0, 2.8, 3.4][i],
   })),
 }
 

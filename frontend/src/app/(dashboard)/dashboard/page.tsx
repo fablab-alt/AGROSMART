@@ -25,10 +25,12 @@ import {
   AlertTriangle,
   CheckCircle,
   Cloud,
+  CloudRain,
   ChevronRight,
   Leaf,
   ShoppingCart,
   GraduationCap,
+  Zap,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, Badge, Skeleton } from '@/components/ui'
 import { cn } from '@/lib/utils'
@@ -47,7 +49,10 @@ interface WeatherData {
   temperature: number
   humidite: number
   vent: number
+  precipitation: number   // rain_level (0-100, capteur voisilab)
+  luminosite: number      // luminosity (lux, capteur voisilab)
   condition: string
+  station: string
   previsions: Array<{
     jour: string
     temp_min: number
@@ -126,11 +131,14 @@ export default function DashboardPage() {
           if (weatherRes.data.success) {
             const wd = weatherRes.data.data
             weatherData = {
-              temperature: Math.round(wd.temperature || 0),
-              humidite: wd.humidity || wd.humidite || 0,
-              vent: Math.round(wd.wind_speed || wd.vent || 0),
-              condition: wd.condition || wd.description || 'Ensoleillé',
-              previsions: [] as WeatherData['previsions']
+              temperature: wd.temperature ?? 0,          // pas de Math.round → même précision que l'onglet météo
+              humidite:    wd.humidity ?? wd.humidite ?? 0,
+              vent:        Math.round(wd.wind_speed ?? wd.vent ?? 0),
+              precipitation: wd.rain_level ?? 0,         // capteur voisilab (0-100)
+              luminosite:    Math.round(wd.luminosity ?? 0), // lux, capteur voisilab
+              condition:   wd.condition || wd.description || 'Ensoleillé',
+              station:     wd.station || '',
+              previsions:  [] as WeatherData['previsions']
             }
           }
 
@@ -138,24 +146,25 @@ export default function DashboardPage() {
           try {
             const forecastRes = await api.get('/weather/forecast')
             if (forecastRes.data.success && weatherData) {
-              const forecastData = forecastRes.data.data
+              const forecastData = forecastRes.data.data?.daily  // { daily: [...] }
               if (Array.isArray(forecastData)) {
-                weatherData.previsions = forecastData.slice(0, 5).map((d: any) => {
-                  const date = d.date ? new Date(d.date) : null;
+                weatherData.previsions = forecastData.slice(0, 4).map((d: any) => {
+                  const date = d.date ? new Date(d.date) : null
+                  const label = d.horizon_heures
+                    ? `+${d.horizon_heures}h`
+                    : (date && !isNaN(date.getTime()) ? date.toLocaleDateString('fr-FR', { weekday: 'short' }) : '-')
                   return {
-                    jour: d.jour || (date && !isNaN(date.getTime()) ? date.toLocaleDateString('fr-FR', { weekday: 'short' }) : '-'),
-                    temp_min: Math.round(d.temp_min || d.temperature_min || 0),
-                    temp_max: Math.round(d.temp_max || d.temperature_max || 0),
-                    condition: d.condition || d.description || 'Nuageux'
-                  };
-                });
+                    jour:     label,
+                    temp_min: Math.round(d.temp_min ?? d.temperature_min ?? 0),
+                    temp_max: Math.round(d.temp_max ?? d.temperature_max ?? 0),
+                    condition: d.description || d.condition || 'Nuageux'
+                  }
+                })
               }
             }
           } catch (e) {
             console.warn('Forecast API failed', e)
-            if (weatherData) {
-              weatherData.previsions = []
-            }
+            if (weatherData) weatherData.previsions = []
           }
 
           if (weatherData) {
@@ -366,6 +375,20 @@ export default function DashboardPage() {
                       <div>
                         <p className="text-sm text-gray-500">Vent</p>
                         <p className="font-semibold">{weather.vent} km/h</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CloudRain className="h-5 w-5 text-blue-600" />
+                      <div>
+                        <p className="text-sm text-gray-500">Précipitations</p>
+                        <p className="font-semibold">{weather.precipitation}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-5 w-5 text-yellow-500" />
+                      <div>
+                        <p className="text-sm text-gray-500">Luminosité</p>
+                        <p className="font-semibold">{weather.luminosite.toLocaleString()} lux</p>
                       </div>
                     </div>
                   </div>
