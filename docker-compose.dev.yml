@@ -76,7 +76,7 @@ services:
       RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-2000}
       TZ:              ${TZ:-Africa/Abidjan}
       RUN_SEED:        ${RUN_SEED:-true}
-      WEATHER_API_URL: ${WEATHER_API_URL:-https://api.open-meteo.com/v1/forecast}
+      WEATHER_API_URL: ${WEATHER_API_URL:-https://meteo.voisilab.online/api}
       WEATHER_API_KEY: ${WEATHER_API_KEY:-}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
       SMTP_HOST:       ${SMTP_HOST:-}

@@ -104,44 +104,52 @@ export default function MeteoPage() {
 
       if (currentRes.data.success) {
         const current = currentRes.data.data;
-        const wmo = getWmoDescription(current.weather_code);
+        const wmo = getWmoDescription(current.weather_code ?? 1);
         setMeteo({
           temperature: Number(current.temperature.toFixed(1)),
-          temperatureMin: 0, // Not available in current, could get from forecast
+          temperatureMin: 0,
           temperatureMax: 0,
           humidity: current.humidity,
-          pressure: 1013, // Default not in OpenMeteo basic
+          pressure: current.pressure ?? 1013,
           windSpeed: current.wind_speed,
-          windDirection: 'N/A', // Need to map degrees to cardio points
+          windDirection: current.wind_direction ?? 'N/A',
           description: wmo.label,
           icon: wmo.icon,
-          visibility: 10, // Not in basic
-          sunrise: '06:00', // Need daily api for this
+          visibility: 10,
+          sunrise: '06:00',
           sunset: '18:00',
-          location: currentRes.data.data.location ? `${lat.toFixed(2)}, ${lon.toFixed(2)}` : 'Position actuelle'
+          location: current.station
+            ? `${current.station} — ${current.location}`
+            : `${lat.toFixed(2)}, ${lon.toFixed(2)}`
         });
       }
 
       if (forecastRes.data.success) {
-        const daily = forecastRes.data.data.daily;
+        // Le controller retourne { data: { daily: [...] } }
+        const daily = forecastRes.data.data?.daily;
         if (daily && daily.length > 0) {
           const newPrevisions = daily.map((d: any) => {
-            const wmo = getWmoDescription(d.weather_code);
+            const wmo = getWmoDescription(d.weather_code ?? 1);
             const date = d.date ? new Date(d.date) : null;
             return {
               date: d.date,
-              jour: date && !isNaN(date.getTime()) ? date.toLocaleDateString('fr-FR', { weekday: 'short' }) : '-',
+              jour: date && !isNaN(date.getTime())
+                ? date.toLocaleDateString('fr-FR', { weekday: 'short' })
+                : `-${d.horizon_heures}h`,
               tempMin: Math.round(d.temp_min),
               tempMax: Math.round(d.temp_max),
               description: wmo.label,
               icon: wmo.icon,
-              precipitation: Math.round(d.precipitation_probability || 0)
+              precipitation: Math.round(d.precipitation_probability ?? 0)
             };
           });
           setPrevisions(newPrevisions);
 
-          // Update min/max for current day from forecast
-          setMeteo(prev => prev ? ({ ...prev, temperatureMin: Math.round(daily[0].temp_min), temperatureMax: Math.round(daily[0].temp_max) }) : prev);
+          setMeteo(prev =>
+            prev
+              ? { ...prev, temperatureMin: Math.round(daily[0].temp_min), temperatureMax: Math.round(daily[0].temp_max) }
+              : prev
+          );
         }
       }
     } catch (error) {
@@ -348,10 +356,10 @@ export default function MeteoPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Prévisions sur 7 jours
+            Prévisions (3h · 6h · 12h · 24h)
           </CardTitle>
           <CardDescription>
-            Planifiez vos activités agricoles en fonction de la météo
+            Prévisions IA de la station météo la plus proche — planifiez vos activités agricoles
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -417,7 +425,9 @@ export default function MeteoPage() {
             <div>
               <p className="font-medium text-green-900">Prévisions</p>
               <p className="text-sm text-green-700">
-                Pluies prévues jeudi - Planifiez les traitements phytosanitaires avant.
+                {previsions.some(p => p.precipitation > 30)
+                  ? `Risque de pluies dans les prochaines heures — planifiez les traitements phytosanitaires avant.`
+                  : 'Conditions favorables aux traitements phytosanitaires dans les prochaines 24h.'}
               </p>
             </div>
           </div>

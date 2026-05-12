@@ -1,8 +1,9 @@
 /**
  * Service Météo
  * AgroSmart - Système Agricole Intelligent
- * 
- * Intégration avec Open-Meteo (Données agricoles spécialisées)
+ *
+ * Intégration avec la plateforme IoT voisilab (meteo.voisilab.online)
+ * Remplace Open-Meteo par les capteurs physiques déployés en CI.
  */
 
 const axios = require('axios');
@@ -10,46 +11,87 @@ const config = require('../config');
 const logger = require('../utils/logger');
 const prisma = require('../config/prisma');
 
+const BASE_URL = config.weather?.apiUrl || 'https://meteo.voisilab.online/api';
+const REQUEST_TIMEOUT = 10000;
+const CACHE_DURATION = 30 * 60 * 1000;      // 30 min — données capteur
+const NODES_CACHE_DURATION = 60 * 60 * 1000; // 1h — liste des stations
+
 class WeatherService {
   constructor() {
-    this.baseUrl = config.weather?.apiUrl || 'https://api.open-meteo.com/v1/forecast';
     this.cache = new Map();
-    this.cacheDuration = 30 * 60 * 1000; // 30 minutes
+    this.nodesCache = null;
+    this.nodesCacheTs = 0;
   }
 
-  /**
-   * Obtenir la météo actuelle pour une localisation
-   */
-  async getCurrentWeather(lat, lon) {
-    const cacheKey = `current_${lat}_${lon}`;
+  // ─── Gestion des stations IoT ─────────────────────────────────────────────
 
-    if (this.cache.has(cacheKey)) {
-      const cached = this.cache.get(cacheKey);
-      if (Date.now() - cached.timestamp < this.cacheDuration) {
-        return cached.data;
+  async getNodes() {
+    if (this.nodesCache && Date.now() - this.nodesCacheTs < NODES_CACHE_DURATION) {
+      return this.nodesCache;
+    }
+    const response = await axios.get(`${BASE_URL}/nodes`, { timeout: REQUEST_TIMEOUT });
+    this.nodesCache = response.data.data;
+    this.nodesCacheTs = Date.now();
+    return this.nodesCache;
+  }
+
+  haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  async getNearestNode(lat, lon) {
+    const nodes = await this.getNodes();
+    let nearest = nodes[0];
+    let minDist = Infinity;
+    for (const node of nodes) {
+      const dist = this.haversineDistance(lat, lon, node.latitude, node.longitude);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = node;
       }
     }
+    return nearest;
+  }
+
+  // ─── Cache helpers ────────────────────────────────────────────────────────
+
+  fromCache(key) {
+    const entry = this.cache.get(key);
+    if (entry && Date.now() - entry.timestamp < CACHE_DURATION) return entry.data;
+    return null;
+  }
+
+  toCache(key, data) {
+    this.cache.set(key, { timestamp: Date.now(), data });
+  }
+
+  // ─── Météo actuelle ───────────────────────────────────────────────────────
+
+  async getCurrentWeather(lat, lon) {
+    const cacheKey = `current_${lat}_${lon}`;
+    const cached = this.fromCache(cacheKey);
+    if (cached) return cached;
 
     try {
-      // https://open-meteo.com/en/docs
-      const response = await axios.get(this.baseUrl, {
-        params: {
-          latitude: lat,
-          longitude: lon,
-          current: 'temperature_2m,relative_humidity_2m,is_day,precipitation,rain,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,pressure_msl',
-          timezone: 'auto'
-          // Pas de clé API nécessaire
-        },
-        timeout: 10000
+      const node = await this.getNearestNode(parseFloat(lat), parseFloat(lon));
+      const response = await axios.get(`${BASE_URL}/sensor-data`, {
+        params: { node_id: node.id, limit: 1 },
+        timeout: REQUEST_TIMEOUT
       });
 
-      const data = this.formatCurrentWeather(response.data);
+      const reading = response.data.data[0];
+      if (!reading) throw new Error(`Aucune donnée disponible pour la station ${node.id}`);
 
-      this.cache.set(cacheKey, {
-        timestamp: Date.now(),
-        data
-      });
-
+      const data = this.formatCurrentWeather(reading, node);
+      this.toCache(cacheKey, data);
       return data;
     } catch (error) {
       logger.error('Erreur récupération météo actuelle', { error: error.message, lat, lon });
@@ -57,38 +99,30 @@ class WeatherService {
     }
   }
 
-  /**
-   * Obtenir les prévisions sur 7 jours avec données agricoles
-   */
+  // ─── Prévisions ───────────────────────────────────────────────────────────
+
   async getForecast(lat, lon) {
     const cacheKey = `forecast_${lat}_${lon}`;
-
-    if (this.cache.has(cacheKey)) {
-      const cached = this.cache.get(cacheKey);
-      if (Date.now() - cached.timestamp < this.cacheDuration) {
-        return cached.data;
-      }
-    }
+    const cached = this.fromCache(cacheKey);
+    if (cached) return cached;
 
     try {
-      const response = await axios.get(this.baseUrl, {
-        params: {
-          latitude: lat,
-          longitude: lon,
-          daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration,precipitation_probability_max,uv_index_max,wind_speed_10m_max,wind_direction_10m_dominant',
-          hourly: 'temperature_2m,relative_humidity_2m,rain,precipitation,precipitation_probability,cloud_cover,evapotranspiration,soil_temperature_0cm,soil_temperature_6cm,soil_temperature_18cm,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_moisture_3_to_9cm,wind_speed_10m,wind_direction_10m,wind_gusts_10m',
-          timezone: 'auto'
-        },
-        timeout: 10000
-      });
+      const node = await this.getNearestNode(parseFloat(lat), parseFloat(lon));
+      const [currentRes, predictRes] = await Promise.all([
+        axios.get(`${BASE_URL}/sensor-data`, {
+          params: { node_id: node.id, limit: 1 },
+          timeout: REQUEST_TIMEOUT
+        }),
+        axios.get(`${BASE_URL}/ai/predict/${node.id}`, { timeout: REQUEST_TIMEOUT })
+      ]);
 
-      const data = this.formatForecast(response.data);
+      const currentReading = currentRes.data.data[0];
+      const predictions = predictRes.data.data;
 
-      this.cache.set(cacheKey, {
-        timestamp: Date.now(),
-        data
-      });
+      if (!currentReading) throw new Error(`Aucune donnée disponible pour la station ${node.id}`);
 
+      const data = this.formatForecast(currentReading, predictions, node);
+      this.toCache(cacheKey, data);
       return data;
     } catch (error) {
       logger.error('Erreur récupération prévisions', { error: error.message, lat, lon });
@@ -96,97 +130,267 @@ class WeatherService {
     }
   }
 
-  /**
-   * Formater les données météo actuelles (Open-Meteo -> AgroSmart Model)
-   */
-  formatCurrentWeather(data) {
-    const current = data.current;
+  // ─── Alertes agricoles ────────────────────────────────────────────────────
 
-    return {
-      temperature: current.temperature_2m,
-      humidite: current.relative_humidity_2m,
-      pression: current.pressure_msl,
-      vent: {
-        vitesse: current.wind_speed_10m,
-        direction: current.wind_direction_10m
-      },
-      nuages: current.cloud_cover,
-      description: this.getWeatherDescription(current.weather_code),
-      icone: this.getWeatherIcon(current.weather_code, current.is_day),
-      // Open-Meteo "Current" ne donne pas directement sunset/sunrise dans ce bloc, 
-      // mais on peut les avoir via "daily". On simplifie ici.
-      timestamp: new Date()
-    };
-  }
+  async getAgriculturalAlerts(lat, lon) {
+    const current = await this.getCurrentWeather(lat, lon);
+    const node = await this.getNearestNode(parseFloat(lat), parseFloat(lon));
+    const alerts = [];
 
-  /**
-   * Formater les prévisions (Open-Meteo -> AgroSmart Model)
-   */
-  formatForecast(data) {
-    const daily = data.daily;
-    const hourly = data.hourly;
-    const dailyForecasts = [];
+    // Alertes remontées par la plateforme IoT
+    try {
+      const response = await axios.get(`${BASE_URL}/alerts`, { timeout: REQUEST_TIMEOUT });
+      const platformAlerts = response.data.data.filter(
+        a => a.node_id === node.id && a.acknowledged === 0
+      );
+      for (const alert of platformAlerts.slice(0, 5)) {
+        alerts.push({
+          type: alert.type.toLowerCase(),
+          niveau: alert.severity,
+          message: alert.message
+        });
+      }
+    } catch (error) {
+      logger.warn('Impossible de récupérer les alertes plateforme', { error: error.message });
+    }
 
-    // Helper to calculate daily average from hourly data
-    const getDailyAvg = (hourlyData, dayIndex) => {
-      const start = dayIndex * 24;
-      const end = start + 24;
-      const prices = hourlyData.slice(start, end);
-      const sum = prices.reduce((a, b) => a + b, 0);
-      return sum / prices.length;
-    };
-
-    // Open-Meteo renvoie des tableaux parallèles (time[], temperature_2m_max[], etc.)
-    for (let i = 0; i < daily.time.length; i++) {
-      // Moisture is often provided as m³/m³ (0-1) or %, we want %
-      // Open-Meteo sometimes returns m³/m³. Check docs or values. 
-      // Usually 0.35 m3/m3. Param is soil_moisture_3_to_9cm.
-      // Let's assume raw value and convert if needed or keep as is.
-      // Actually soil_moisture_x_to_y is usually m³/m³. To get %, * 100.
-      const moistureRaw = getDailyAvg(hourly.soil_moisture_3_to_9cm, i);
-
-      dailyForecasts.push({
-        date: daily.time[i],
-        temp_min: daily.temperature_2m_min[i],
-        temp_max: daily.temperature_2m_max[i],
-        temp_moyenne: (daily.temperature_2m_max[i] + daily.temperature_2m_min[i]) / 2,
-        precipitation_totale: daily.precipitation_sum[i],
-        probabilite_pluie: daily.precipitation_probability_max[i],
-        etp: daily.et0_fao_evapotranspiration[i],
-        uv_index: daily.uv_index_max[i],
-
-        // Calculated fields
-        humidite: Math.round(getDailyAvg(hourly.relative_humidity_2m, i)),
-        vitesse_vent: daily.wind_speed_10m_max[i],
-        direction_vent: this.degreesToDirection(daily.wind_direction_10m_dominant[i]),
-
-        // Soil Params
-        soil_temperature: Math.round(getDailyAvg(hourly.soil_temperature_6cm, i) * 10) / 10,
-        soil_moisture: Math.round(moistureRaw * 100), // Convert m³/m³ to % if needed, usually ranges 0-1.
-
-        description: this.getWeatherDescription(daily.weather_code[i]),
-        icone: this.getWeatherIcon(daily.weather_code[i], 1)
+    // Alertes dérivées des conditions actuelles
+    if (current.temperature > 35) {
+      alerts.push({
+        type: 'chaleur',
+        niveau: 'warning',
+        message: `Température élevée (${current.temperature}°C). Évitez les travaux aux heures chaudes et hydratez les cultures.`
+      });
+    }
+    if (current.pluie > 70) {
+      alerts.push({
+        type: 'pluie',
+        niveau: 'warning',
+        message: `Fortes précipitations détectées (capteur : ${current.pluie}). Reporter les traitements phytosanitaires.`
+      });
+    }
+    if (current.vent.vitesse > 40) {
+      alerts.push({
+        type: 'vent',
+        niveau: 'warning',
+        message: `Vent fort (${current.vent.vitesse} km/h). Reporter les pulvérisations.`
+      });
+    }
+    if (current.anomalie.detectee) {
+      alerts.push({
+        type: 'anomalie',
+        niveau: 'info',
+        message: `Anomalie météorologique détectée sur la station ${current.station.nom} (score : ${current.anomalie.score.toFixed(2)}).`
       });
     }
 
+    return alerts;
+  }
+
+  // ─── Recommandations d'irrigation ────────────────────────────────────────
+
+  async getIrrigationRecommendations(parcelleId) {
+    try {
+      const parcelle = await prisma.parcelle.findUnique({
+        where: { id: parcelleId },
+        include: {
+          plantations: {
+            where: { statut: 'active' },
+            include: { culture: true },
+            take: 1
+          }
+        }
+      });
+
+      if (!parcelle) throw new Error('Parcelle non trouvée');
+
+      const culture = parcelle.plantations.length > 0 ? parcelle.plantations[0].culture : null;
+      const cultureNom = culture ? culture.nom : 'Culture inconnue';
+
+      const coords = {
+        lat: parseFloat(parcelle.latitude) || 5.36,
+        lon: parseFloat(parcelle.longitude) || -4.0083
+      };
+
+      const [current, forecast] = await Promise.all([
+        this.getCurrentWeather(coords.lat, coords.lon),
+        this.getForecast(coords.lat, coords.lon)
+      ]);
+
+      const lastMesure = await prisma.mesure.findFirst({
+        where: {
+          capteur: { parcelleId, type: 'HUMIDITE_SOL' }
+        },
+        orderBy: { timestamp: 'desc' }
+      });
+
+      const humiditeSol = lastMesure ? parseFloat(lastMesure.valeur) : 50;
+
+      // ETP approché depuis la température (Hargreaves simplifié pour CI tropical)
+      const etp = forecast.previsions[0]?.etp || this.estimateEtp(current.temperature);
+      const pluiePrevue = forecast.previsions[0]?.precipitation_totale || 0;
+      let besoinIrrigation = etp - pluiePrevue;
+
+      if (humiditeSol > 80) besoinIrrigation = 0;
+      else if (humiditeSol < 40) besoinIrrigation *= 1.2;
+
+      besoinIrrigation = Math.max(0, Math.round(besoinIrrigation * 10) / 10);
+
+      let meilleurMoment = 'matin (6h-9h)';
+      if (current.temperature < 25) meilleurMoment = 'matinée ou fin d\'après-midi';
+      else if (current.temperature > 32) meilleurMoment = 'tôt le matin (5h-7h) ou soir (18h-20h)';
+
+      return {
+        parcelle: { id: parcelle.id, nom: parcelle.nom, culture: cultureNom },
+        meteo: {
+          temperature: current.temperature,
+          humidite_air: current.humidite,
+          humidite_sol: humiditeSol,
+          pluie_prevue: pluiePrevue
+        },
+        irrigation: {
+          etp,
+          besoin_eau_mm: besoinIrrigation,
+          meilleur_moment: meilleurMoment,
+          recommandation: besoinIrrigation > 0
+            ? `Irriguer avec environ ${besoinIrrigation} mm d'eau`
+            : "Pas d'irrigation nécessaire aujourd'hui"
+        },
+        alerts: await this.getAgriculturalAlerts(coords.lat, coords.lon)
+      };
+    } catch (error) {
+      logger.error('Erreur calcul recommandations irrigation', { error: error.message, parcelleId });
+      throw error;
+    }
+  }
+
+  // ─── Sauvegarde historique ────────────────────────────────────────────────
+
+  async saveWeatherData(lat, lon) {
+    try {
+      const current = await this.getCurrentWeather(lat, lon);
+      await prisma.meteo.create({
+        data: {
+          latitude: lat,
+          longitude: lon,
+          temperature: current.temperature,
+          humiditeAir: current.humidite,
+          pression: current.pression,
+          vitesseVent: current.vent.vitesse,
+          directionVent: current.vent.direction,
+          description: current.description,
+          observationAt: new Date(current.timestamp),
+          source: 'voisilab-iot'
+        }
+      });
+      logger.info('Données météo sauvegardées', { lat, lon, station: current.station?.id });
+    } catch (error) {
+      logger.error('Erreur sauvegarde données météo', { error: error.message });
+    }
+  }
+
+  // ─── Formatters ───────────────────────────────────────────────────────────
+
+  formatCurrentWeather(reading, node) {
+    const weatherCode = this.deriveWeatherCode(
+      reading.temperature,
+      reading.humidity,
+      reading.rain_level
+    );
     return {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      timezone: data.timezone,
-      previsions: dailyForecasts
+      temperature: Math.round(reading.temperature * 10) / 10,
+      humidite: Math.round(reading.humidity),
+      pression: Math.round(reading.pressure),
+      vent: {
+        vitesse: Math.round(reading.wind_speed * 10) / 10,
+        direction: 'N/A'
+      },
+      pluie: reading.rain_level,
+      luminosite: reading.luminosity,
+      weather_code: weatherCode,
+      description: this.getWeatherDescription(weatherCode),
+      icone: this.getWeatherIcon(weatherCode, 1),
+      station: { id: node.id, nom: node.name, localisation: node.location },
+      anomalie: {
+        score: reading.anomaly_score,
+        detectee: reading.is_anomaly === 1
+      },
+      timestamp: new Date(reading.timestamp * 1000)
     };
+  }
+
+  formatForecast(currentReading, predictions, node) {
+    const now = new Date();
+    const previsions = predictions.map(pred => {
+      const date = new Date(now.getTime() + pred.horizon_hours * 60 * 60 * 1000);
+      const dateStr = date.toISOString().split('T')[0];
+      // Estimation du niveau de pluie prévu : atténué si probabilité d'événement extrême est faible
+      const rainEstimate = currentReading.rain_level * (1 - pred.extreme_event_probability * 0.5);
+      const weatherCode = this.deriveWeatherCode(
+        pred.predicted_temp,
+        pred.predicted_humidity,
+        rainEstimate
+      );
+      const tempVariation = pred.predicted_temp * 0.05;
+
+      return {
+        date: dateStr,
+        horizon_heures: pred.horizon_hours,
+        temp_min: Math.round((pred.predicted_temp - tempVariation) * 10) / 10,
+        temp_max: Math.round((pred.predicted_temp + tempVariation) * 10) / 10,
+        temp_moyenne: Math.round(pred.predicted_temp * 10) / 10,
+        humidite: Math.round(pred.predicted_humidity),
+        pression: Math.round(pred.predicted_pressure),
+        precipitation_totale: 0, // Non fourni par la plateforme IoT
+        probabilite_pluie: Math.round(pred.extreme_event_probability * 100),
+        etp: this.estimateEtp(pred.predicted_temp),
+        uv_index: null,
+        vitesse_vent: Math.round(currentReading.wind_speed * 10) / 10,
+        direction_vent: 'N/A',
+        weather_code: weatherCode,
+        description: this.getWeatherDescription(weatherCode),
+        icone: this.getWeatherIcon(weatherCode, 1)
+      };
+    });
+
+    return {
+      latitude: node.latitude,
+      longitude: node.longitude,
+      station: { id: node.id, nom: node.name, localisation: node.location },
+      previsions
+    };
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  /**
+   * Derive un code WMO approximatif à partir des valeurs capteurs.
+   * Permet de réutiliser le mapping icônes/descriptions existant.
+   */
+  deriveWeatherCode(temperature, humidity, rainLevel) {
+    if (rainLevel > 80) return 65; // pluie forte
+    if (rainLevel > 50) return 63; // pluie modérée
+    if (rainLevel > 20) return 61; // pluie faible
+    if (humidity > 90) return 45;  // brouillard
+    if (humidity > 75) return 3;   // couvert
+    if (humidity > 60) return 2;   // partiellement nuageux
+    if (temperature > 30 && humidity < 50) return 0; // ciel clair
+    return 1; // majoritairement clair
+  }
+
+  /**
+   * Approximation ETP (mm/j) par formule empirique tropicale.
+   * Hargreaves simplifié sans données Ra : valide pour le contexte CI.
+   */
+  estimateEtp(temperature) {
+    return Math.round(Math.max(2, Math.min(8, 0.15 * temperature - 1)) * 10) / 10;
   }
 
   degreesToDirection(degrees) {
     const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    const index = Math.round(degrees / 45) % 8;
-    return directions[index];
+    return directions[Math.round(degrees / 45) % 8];
   }
 
-  /**
-   * Mapping Codes WMO -> Descriptions Françaises
-   * https://open-meteo.com/en/docs
-   */
   getWeatherDescription(wmoCode) {
     const codes = {
       0: 'Ciel clair',
@@ -201,218 +405,32 @@ class WeatherService {
       61: 'Pluie faible',
       63: 'Pluie modérée',
       65: 'Pluie forte',
-      71: 'Neige faible', // Rare en CI mais bon
       80: 'Averses de pluie faibles',
       81: 'Averses de pluie modérées',
       82: 'Averses de pluie violentes',
       95: 'Orage léger ou modéré',
-      96: 'Orage avec grêle légère',
       99: 'Orage avec grêle forte'
     };
     return codes[wmoCode] || 'Météo variable';
   }
 
-  /**
-   * Mapping WMO -> Icon ID (OpenWeatherMap compatible IDs pour le frontend)
-   */
   getWeatherIcon(wmoCode, isDay = 1) {
-    // 0 -> 01d/n (Clear)
-    // 1-3 -> 02d/n - 04d/n (Clouds)
-    // 45,48 -> 50d (Mist)
-    // 51-67 -> 09d (Rain)
-    // 71-77 -> 13d (Snow)
-    // 80-82 -> 10d (Showers)
-    // 95-99 -> 11d (Thunderstorm)
-
     const suffix = isDay ? 'd' : 'n';
-
     if (wmoCode === 0) return `01${suffix}`;
     if (wmoCode === 1) return `02${suffix}`;
     if (wmoCode === 2) return `03${suffix}`;
     if (wmoCode === 3) return `04${suffix}`;
     if ([45, 48].includes(wmoCode)) return `50${suffix}`;
-    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67].includes(wmoCode)) return `09${suffix}`; // Rain
-    if ([80, 81, 82].includes(wmoCode)) return `10${suffix}`; // Showers
-    if ([95, 96, 99].includes(wmoCode)) return `11${suffix}`; // Storm
-
-    return `02${suffix}`; // Default
+    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67].includes(wmoCode)) return `09${suffix}`;
+    if ([80, 81, 82].includes(wmoCode)) return `10${suffix}`;
+    if ([95, 96, 99].includes(wmoCode)) return `11${suffix}`;
+    return `02${suffix}`;
   }
 
-  /**
-   * Obtenir les alertes météo agricoles
-   */
-  async getAgriculturalAlerts(lat, lon) {
-    const current = await this.getCurrentWeather(lat, lon);
-    const forecast = await this.getForecast(lat, lon);
-    const alerts = [];
-
-    // Alerte chaleur
-    if (current.temperature > 35) {
-      alerts.push({
-        type: 'chaleur',
-        niveau: 'warning',
-        message: `Température élevée (${current.temperature}°C). Évitez les travaux aux heures chaudes et hydratez les cultures.`
-      });
-    }
-
-    // Alerte pluie forte (>30mm)
-    const pluieProchaine = forecast.previsions.find(p => p.precipitation_totale > 30);
-    if (pluieProchaine) {
-      alerts.push({
-        type: 'pluie',
-        niveau: 'info',
-        message: `Fortes pluies prévues le ${pluieProchaine.date} (${pluieProchaine.precipitation_totale}mm). Reporter les traitements phytosanitaires.`
-      });
-    }
-
-    // Alerte vent fort
-    if (current.vent.vitesse > 40) {
-      alerts.push({
-        type: 'vent',
-        niveau: 'warning',
-        message: `Vent fort (${current.vent.vitesse} km/h). Reporter les pulvérisations.`
-      });
-    }
-
-    return alerts;
-  }
-
-  /**
-   * Recommandations d'irrigation basées sur la météo (Optimisé avec ETP Open-Meteo)
-   */
-  async getIrrigationRecommendations(parcelleId) {
-    try {
-      // Récupérer les infos de la parcelle
-      const parcelle = await prisma.parcelle.findUnique({
-        where: { id: parcelleId },
-        include: {
-          plantations: {
-            where: { statut: 'active' },
-            include: { culture: true },
-            take: 1
-          }
-        }
-      });
-
-      if (!parcelle) {
-        throw new Error('Parcelle non trouvée');
-      }
-
-      // Map simplified parcelle object to match expected 'p' structure somewhat or just use direct access
-      const culture = parcelle.plantations.length > 0 ? parcelle.plantations[0].culture : null;
-      const cultureNom = culture ? culture.nom : 'Culture inconnue';
-      const besoinsEau = culture ? (culture.besoinsEauJour || 5) : 5; // Assuming besoinsEauJour exists on Culture or handling default
-      // Note: Culture model in schema doesn't show 'besoinsEauJour'. It shows 'besoins_eau_jour' in legacy SQL.
-      // Schema line 500-515 (Step 456) shows: nom, nomScientifique, coton, etc. NO 'besoinsEauJour'?
-      // Wait, let's check Culture model again. Step 456 lines 500-515.
-      // id, nom, nomScientifique, categorie, saisonCulture, dureeJours, phOptimal, temperatureMin/Max.
-      // NO besoinsEauJour in Prisma Schema.
-      // If legacy DB has it, it's missing in Prisma.
-      // I should update schema or use default. Using default 5 for now to avoid schema creep loop unless critical.
-      // If I use default, logic works.
-
-      const coords = { lat: parseFloat(parcelle.latitude) || 5.3600, lon: parseFloat(parcelle.longitude) || -4.0083 };
-
-      // Obtenir météo
-      const current = await this.getCurrentWeather(coords.lat, coords.lon);
-      const forecast = await this.getForecast(coords.lat, coords.lon);
-
-      // Dernière mesure d'humidité sol
-      const lastMesure = await prisma.mesure.findFirst({
-        where: {
-          capteur: {
-            parcelleId: parcelleId,
-            type: 'HUMIDITE_SOL'
-          }
-        },
-        orderBy: { timestamp: 'desc' }
-      });
-
-      const humiditeSol = lastMesure ? parseFloat(lastMesure.valeur) : 50;
-
-      // Utiliser l'ETP directement fournie par Open-Meteo (ET0 FAO-56)
-      const etp = forecast.previsions[0].etp || 4.5;
-      const kc = 1.0;
-      const besoinsReels = etp * kc;
-      const pluiePrevue = forecast.previsions[0].precipitation_totale;
-      let besoinIrrigation = besoinsReels - pluiePrevue;
-
-      if (humiditeSol > 80) {
-        besoinIrrigation = 0;
-      } else if (humiditeSol < 40) {
-        besoinIrrigation *= 1.2;
-      }
-
-      besoinIrrigation = Math.max(0, Math.round(besoinIrrigation * 10) / 10);
-
-      let meilleurMoment = 'matin (6h-9h)';
-      if (current.temperature < 25) {
-        meilleurMoment = 'matinée ou fin d\'après-midi';
-      } else if (current.temperature > 32) {
-        meilleurMoment = 'tôt le matin (5h-7h) ou soir (18h-20h)';
-      }
-
-      return {
-        parcelle: {
-          id: parcelle.id,
-          nom: parcelle.nom,
-          culture: cultureNom
-        },
-        meteo: {
-          temperature: current.temperature,
-          humidite_air: current.humidite,
-          humidite_sol: humiditeSol,
-          pluie_prevue: pluiePrevue
-        },
-        irrigation: {
-          etp: etp,
-          besoin_eau_mm: besoinIrrigation,
-          meilleur_moment: meilleurMoment,
-          recommandation: besoinIrrigation > 0
-            ? `Irriguer avec environ ${besoinIrrigation} mm d'eau`
-            : 'Pas d\'irrigation nécessaire aujourd\'hui'
-        },
-        alerts: await this.getAgriculturalAlerts(coords.lat, coords.lon)
-      };
-    } catch (error) {
-      logger.error('Erreur calcul recommandations irrigation', { error: error.message, parcelleId });
-      throw error;
-    }
-  }
-
-  /**
-   * Sauvegarder les données météo historiques
-   */
-  async saveWeatherData(lat, lon) {
-    try {
-      const current = await this.getCurrentWeather(lat, lon);
-
-      await prisma.meteo.create({
-        data: {
-          latitude: lat,
-          longitude: lon,
-          temperature: current.temperature,
-          humiditeAir: current.humidite,
-          pression: current.pression,
-          vitesseVent: current.vent.vitesse,
-          directionVent: current.vent.direction,
-          description: current.description,
-          observationAt: new Date(current.timestamp), // Ensure JS Date
-          source: 'open-meteo'
-        }
-      });
-
-      logger.info('Données météo sauvegardées', { lat, lon });
-    } catch (error) {
-      logger.error('Erreur sauvegarde données météo', { error: error.message });
-    }
-  }
-
-  /**
-   * Nettoyer le cache
-   */
   clearCache() {
     this.cache.clear();
+    this.nodesCache = null;
+    this.nodesCacheTs = 0;
   }
 }
 

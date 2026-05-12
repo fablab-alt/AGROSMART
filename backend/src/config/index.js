@@ -69,9 +69,9 @@ const config = {
     from: process.env.EMAIL_FROM || 'AgroSmart <noreply@agrosmart.ci>'
   },
 
-  // API Météo
+  // API Météo — voisilab IoT platform
   weather: {
-    apiUrl: process.env.WEATHER_API_URL || 'https://api.open-meteo.com/v1/forecast',
+    apiUrl: process.env.WEATHER_API_URL || 'https://meteo.voisilab.online/api',
     apiKey: process.env.WEATHER_API_KEY
   },
 

@@ -21,7 +21,7 @@ AgroSmart CI accompagne les producteurs, agronomes, acheteurs et coopératives i
 - **Marketplace** : achat / vente / location de matériel agricole
 - **Forum communautaire** avec likes, réponses et marquage de solution
 - **Réseau social** : demandes d'amitié, suggestions par région
-- **Météo** intégrée (Open-Meteo + OpenWeather)
+- **Météo** intégrée via la plateforme IoT [meteo.voisilab.online](https://meteo.voisilab.online) (capteurs physiques déployés en CI, prévisions IA à 4 horizons)
 - **Mode visiteur** : exploration complète sans inscription, avec données mockées
 - **Multi-langue** : Français, Baoulé, Malinké, Senoufo, Fulfulde, Bambara
 
@@ -197,7 +197,10 @@ ALLOWED_ORIGINS=https://agrosmart.voisilab.online
 NEXT_PUBLIC_API_URL=https://api.agrosmart.voisilab.online/api/v1
 NEXT_PUBLIC_SOCKET_URL=https://api.agrosmart.voisilab.online
 
-# Météo / SMS / Email — voir .env.docker.example pour la liste complète
+# Météo voisilab IoT (pas de clé nécessaire)
+WEATHER_API_URL=https://meteo.voisilab.online/api
+
+# SMS / Email — voir .env.docker.example pour la liste complète
 ```
 
 Référence complète des variables dans `.env.docker.example`.
